@@ -7,16 +7,17 @@ This report provides a brief narrative of what changed in each file compared to 
 
 ## Summary
 
-Added files: 24
+Added files: 25
 Removed files: 0
 Changed files: 23
 
 ## Added
 
-- `BUILD.md`: Build instructions added.
-- `CRAN_DIFF.md`: Added in the current codebase (new file).
+- `BUILD.md`: Build instructions added. (last change: 2026-02-05 | Docs: build notes, worktrees, CRAN diff summary)
+- `CRAN_DIFF.md`: Added in the current codebase (new file). (last change: 2026-02-05 | Docs: build notes, worktrees, CRAN diff summary)
 - `R/np.pairs.R`: Added cross‑validated pairs plotting utilities (np.pairs / np.pairs.plot) for quick bivariate diagnostics. (last change: 2026-02-05 | Sync non-MPI code fixes from npRmpi)
-- `WORKTREES.md`: Added in the current codebase (new file).
+- `Rplots.pdf`: Added in the current codebase (new file).
+- `WORKTREES.md`: Added in the current codebase (new file). (last change: 2026-02-05 | Docs: build notes, worktrees, CRAN diff summary)
 - `np_0.60-21.tar.gz`: Added in the current codebase (new file).
 - `tests/testthat.R`: Added in the current codebase (new file). (last change: 2026-02-01 | Add unit tests using testthat and clean up phihat to phi in npregiv*)
 - `tests/testthat/test-extra.R`: Added in the current codebase (new file). (last change: 2026-02-01 | Add unit tests using testthat and clean up phihat to phi in npregiv*)
@@ -40,12 +41,12 @@ Changed files: 23
 
 ## Changed
 
-- `.Rbuildignore`: Updated relative to CRAN (see file for details). (last change: 2014-01-06 | Updated .Rbuildignore for files in man, changes to np.quantile.Rd)
+- `.Rbuildignore`: Updated relative to CRAN (see file for details). (last change: 2026-02-05 | Docs: build notes, worktrees, CRAN diff summary)
 - `DESCRIPTION`: Version/metadata updates. (last change: 2026-02-04 | Bumped up version # to 0.60-21 in anticipation of moving to open issues)
 - `NAMESPACE`: Export/method registration updates for new/changed functions. (last change: 2026-02-02 | Implement S3 methods (print, summary, plot) for npregiv and npregivderiv)
 - `R/np.condensity.bw.R`: Minor conditional density bandwidth selection fix (consistency with updated inputs). (last change: 2026-02-05 | Fix np package registrations after sync)
 - `R/np.density.R`: Density estimation tweaks and guardrails (minor logic adjustments for stability/consistency). (last change: 2026-02-05 | Fix np package registrations after sync)
-- `R/np.plot.R`: Plotting updates to align with revised outputs and defaults. (last change: 2026-02-05 | Sync non-MPI code fixes from npRmpi)
+- `R/np.plot.R`: Plotting updates to align with revised outputs and defaults (includes plreg categorical plot fix). (last change: 2026-02-05 | Fix npplot for plreg with categorical predictor)
 - `R/np.qregression.R`: Quantile regression path adjusted for consistency with updated bandwidth/fit handling. (last change: 2026-02-05 | Fix np package registrations after sync)
 - `R/np.sigtest.R`: Adjusted significance test workflow and guardrails (fixes error when training/eval data frames are not aligned; supports updated regression calls). (last change: 2026-02-05 | Sync non-MPI code fixes from npRmpi)
 - `R/np.singleindex.R`: Single‑index model updates (minor logic/guard changes). (last change: 2026-02-05 | Sync non-MPI code fixes from npRmpi)
@@ -54,7 +55,7 @@ Changed files: 23
 - `R/npregivderiv.R`: npregiv derivative computation and summaries aligned with updated argument ordering. (last change: 2026-02-03 | Add bandwidth details to npregiv summaries)
 - `R/util.R`: Utility updates and numerical safeguards (NZD helpers and related checks) aligned with newer codepaths. (last change: 2026-02-05 | Sync non-MPI code fixes from npRmpi)
 - `R/zzz.R`: Startup/initialization tweaks (package message and load behavior alignment). (last change: 2026-02-04 | Bumped up version # to 0.60-21 in anticipation of moving to open issues)
-- `README.md`: Updated relative to CRAN (see file for details). (last change: 2026-01-27 | # Commit Message)
+- `README.md`: Updated relative to CRAN (see file for details). (last change: 2026-02-05 | Docs: build notes, worktrees, CRAN diff summary)
 - `demo/Engel95.R`: Demo updates for Engel95 dataset usage. (last change: 2026-02-01 | Add unit tests using testthat and clean up phihat to phi in npregiv*)
 - `demo/npregiv.R`: Demo updates for npregiv usage. (last change: 2026-02-01 | Add unit tests using testthat and clean up phihat to phi in npregiv*)
 - `man/data-Engel95.Rd`: Engel95 dataset documentation updates. (last change: 2026-02-01 | Add unit tests using testthat and clean up phihat to phi in npregiv*)
@@ -68,6 +69,7 @@ Changed files: 23
 
 The following issues appear to be addressed by changes in this tree:
 
+- `#2` (npplreg plot with categorical predictor): addressed in `R/np.plot.R`.
 - `#4` (npcdensbw cv.ls -> cv.ml segfault): addressed in C/R core updates (see `src/np.c` and related bandwidth logic).
 - `#6` (npindexbw bwtype option): addressed in `R/np.singleindex.bw.R` and `R/np.singleindex.R`.
 - `#7` (uocquantile subset of factor): addressed in `R/util.R`.
