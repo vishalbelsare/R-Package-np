@@ -14,6 +14,9 @@ npksum.formula <-
     mf <- mf[c(1,m)]
     mf[[1]] <- as.name("model.frame")
     mf.args <- as.list(mf[-1L])
+    if (!missing(subset))
+      mf.args[c("data", "subset")] <- .np_formula_subset_inputs(
+        data, substitute(subset), parent.frame())
     mf <- do.call(stats::model.frame, mf.args, envir = parent.frame())
     
     tydat <- model.response(mf)
