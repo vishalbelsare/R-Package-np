@@ -2006,7 +2006,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
         elapsed = native.elapsed,
         status = "ok",
         message = as.character(native$message[1L]),
-        objective = as.numeric(native$objective[1L]),
+        objective = as.numeric(raw[[1L]]),
         bbe = as.numeric(native$blackbox_evaluations[1L]),
         iterations = as.numeric(native$iterations[1L]),
         solution = as.numeric(native$solution),
@@ -2016,7 +2016,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
         native = native
       )
       list(record = record, raw.valid = .np_nn_raw_objective_valid(raw[[1L]]) &&
-        .np_nn_raw_objective_valid(record$objective))
+        .np_nn_raw_objective_valid(as.numeric(native$objective[1L])))
     }
 
     for (i in seq_len(nrow(native.start.matrix))) {
@@ -2041,7 +2041,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
         all(c(template[["ybw"]], template[["xbw"]]) == 0) &&
         template$type %in% c("generalized_nn", "adaptive_nn") &&
         length(setup$cont_flat) > 0L) {
-      incumbent <- vapply(native.results, function(z) z$objective, numeric(1L))
+      incumbent <- vapply(native.results, function(z) as.numeric(z$native$objective[1L]), numeric(1L))
       incumbent[!is.finite(incumbent)] <- -Inf
       incumbent.index <- if (any(is.finite(incumbent))) which.max(incumbent) else 1L
       recovery.raw.eval <- function(point) {
@@ -2723,7 +2723,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
         elapsed = native.elapsed,
         status = "ok",
         message = as.character(native$message[1L]),
-        objective = as.numeric(native$objective[1L]),
+        objective = as.numeric(raw[[1L]]),
         bbe = as.numeric(native$blackbox_evaluations[1L]),
         iterations = as.numeric(native$iterations[1L]),
         solution = as.numeric(native$solution),
@@ -2732,7 +2732,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
         native = native
       )
       list(record = record, raw.valid = .np_nn_raw_objective_valid(raw[[1L]]) &&
-        .np_nn_raw_objective_valid(record$objective))
+        .np_nn_raw_objective_valid(as.numeric(native$objective[1L])))
     }
 
     for (i in seq_len(nrow(native.start.matrix))) {
@@ -2755,7 +2755,7 @@ npPreparedObjectiveSearchConditionalDensity <- function(template,
     if (!is.finite(native.best.index) && is.null(point.start) &&
         template$type %in% c("generalized_nn", "adaptive_nn") &&
         length(setup$cont_flat) > 0L) {
-      incumbent <- vapply(native.results, function(z) z$objective, numeric(1L))
+      incumbent <- vapply(native.results, function(z) as.numeric(z$native$objective[1L]), numeric(1L))
       incumbent[!is.finite(incumbent)] <- -Inf
       incumbent.index <- if (any(is.finite(incumbent))) which.max(incumbent) else 1L
       recovery.raw.eval <- function(point) {
