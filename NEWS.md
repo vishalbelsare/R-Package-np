@@ -1,5 +1,9 @@
 # np 0.80-1
 
+* Single-index bootstrap standard errors now report bootstrap replications,
+  forwarding nested regression-fit activity to the same progress display.
+  Resampling, numerical results and the number of replications are unchanged.
+
 * `npindex(..., gradients = TRUE)` again returns asymptotic coefficient
   covariance for `vcov()` without requiring `se = TRUE`, restoring 0.70-5
   behavior. Bootstrap standard errors of fitted values and gradients remain

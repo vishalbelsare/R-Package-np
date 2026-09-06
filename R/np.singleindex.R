@@ -948,7 +948,11 @@ npindex.sibandwidth <-
 
     if (se){
 
-      boot.out = suppressWarnings(boot(data.frame(txdat,tydat), boofun, R = B))
+      progress <- .np_bootstrap_progress_begin(B, "Bootstrapping single-index fit")
+      on.exit(.np_bootstrap_progress_end(progress), add = TRUE)
+      boot.out = suppressWarnings(boot(data.frame(txdat,tydat),
+        .np_bootstrap_progress_statistic(progress, boofun), R = B))
+      .np_bootstrap_progress_step(progress, B, "computing bootstrap standard errors")
 
       index.merr = matrix(data = 0, ncol = 1, nrow = length(index.eval))
       index.merr[,] = .np_plot_bootstrap_col_sds(boot.out$t[, seq_len(length(index.eval)), drop = FALSE])
@@ -965,6 +969,7 @@ npindex.sibandwidth <-
         index.mgerr = sd(boot.out$t[,2*length(index.eval)+1])
         index.mgerr = abs(bws$beta)*index.mgerr
       }
+      .np_bootstrap_progress_end(progress, completed = TRUE)
     }
     ## goodness of fit
 
