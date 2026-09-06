@@ -55,11 +55,12 @@ npindex <-
 
 npindex.formula <-
     function(bws, data = NULL, newdata = NULL, y.eval = FALSE,
-             se = FALSE, ...){
+             se = TRUE, ..., se.type = c("asymptotic", "bootstrap")){
 
         dots <- list(...)
         npRejectLegacyBooleanErrors(dots, "npindex")
         se <- npValidateScalarLogical(se, "se")
+        se.type <- match.arg(se.type)
 
         mc <- match.call(expand.dots = FALSE)
         tt <- terms(bws)
@@ -153,7 +154,7 @@ npindex.formula <-
             si.args$eydat <- eydat
         }
         si.args$bws <- si.bws
-        ev <- do.call(npindex, c(si.args, list(se = se), dots))
+        ev <- do.call(npindex, c(si.args, list(se = se, se.type = se.type), dots))
         ev$call <- mc
         environment(ev$call) <- parent.frame()
 
@@ -302,12 +303,13 @@ npindex.call <-
 }
 
 npindex.default <- function(bws, txdat, tydat, nomad = FALSE,
-                            se = FALSE, ...){
+                            se = TRUE, ..., se.type = c("asymptotic", "bootstrap")){
   sc <- sys.call()
   sc.names <- names(sc)
   nomad <- npValidateNomadControl(nomad, "nomad")
   npRejectLegacyBooleanErrors(list(...), "npindex")
   se <- npValidateScalarLogical(se, "se")
+  se.type <- match.arg(se.type)
 
   ## here we check to see if the function was called with tdat =
   ## if it was, we need to catch that and map it to dat =
@@ -361,7 +363,7 @@ npindex.default <- function(bws, txdat, tydat, nomad = FALSE,
           caller_env = parent.frame()
         )
     }
-    return(do.call(npindex, c(fit.args, list(se = se), fit.dots)))
+    return(do.call(npindex, c(fit.args, list(se = se, se.type = se.type), fit.dots)))
   }
 
   ## if bws was passed in explicitly, do not compute bandwidths
@@ -373,6 +375,7 @@ npindex.default <- function(bws, txdat, tydat, nomad = FALSE,
   
   sc.bw[[1]] <- quote(npindexbw)
   sc.bw$se <- NULL
+  sc.bw$se.type <- NULL
 
   if (bws.formula) {
     ib <- match("bws", names(sc.bw), nomatch = 0L)
@@ -427,7 +430,7 @@ npindex.default <- function(bws, txdat, tydat, nomad = FALSE,
   }
   if (no.bws || bws.formula || is.call(bws))
     call.args$.np_fit_progress_handoff <- TRUE
-  do.call(npindex, c(call.args, list(se = se), list(...)))
+  do.call(npindex, c(call.args, list(se = se, se.type = se.type), list(...)))
 }
 
 npindex.sibandwidth <-
@@ -437,11 +440,14 @@ npindex.sibandwidth <-
            exdat,
            eydat,
            B = 399,
-           se = FALSE,
+           se = TRUE,
            gradients = FALSE,
-           residuals = FALSE, ...) {
+           residuals = FALSE, ..., se.type = c("asymptotic", "bootstrap")) {
 
     fit.start <- proc.time()[3]
+    se.type <- match.arg(se.type)
+    asymptotic.se <- isTRUE(se) && identical(se.type, "asymptotic")
+    bootstrap.se <- isTRUE(se) && identical(se.type, "bootstrap")
     dots <- list(...)
     npRejectLegacyBooleanErrors(dots, "npindex")
     npRejectLegacyBootstrapCount(names(dots), "npindex")
@@ -613,7 +619,7 @@ npindex.sibandwidth <-
     } else {
       NULL
     }
-    next_npreg_fit_args <- function(exdat = NULL, gradients = FALSE) {
+    next_npreg_fit_args <- function(exdat = NULL, gradients = FALSE, se = FALSE) {
       args <- if (identical(regtype, "lp") || lc.fixed.progress.route) {
         c(
           list(
@@ -636,6 +642,7 @@ npindex.sibandwidth <-
         args$.np_fit_progress_handoff <- TRUE
         fit.progress.handoff <<- FALSE
       }
+      args$se <- se
       args
     }
 
@@ -652,7 +659,7 @@ npindex.sibandwidth <-
       )
       if (fast.largeh) {
         fast.largeh.eval.mean <- {
-          tww.fast <- npksum(
+          tww.fast <- .np_index_kernel_sum(
             txdat = index.df,
             tydat = as.matrix(data.frame(tydat, 1)),
             weights = as.matrix(data.frame(tydat, 1)),
@@ -668,7 +675,7 @@ npindex.sibandwidth <-
 
         if (!no.ex && (no.ey || residuals)) {
           fast.largeh.train.mean <- {
-            tww.fast <- npksum(
+            tww.fast <- .np_index_kernel_sum(
               txdat = index.df,
               tydat = as.matrix(data.frame(tydat, 1)),
               weights = as.matrix(data.frame(tydat, 1)),
@@ -687,12 +694,33 @@ npindex.sibandwidth <-
 
     ## Next, if no gradients are requested, use (faster) npksum
 
-    if(gradients==FALSE) {
+    if (asymptotic.se) {
+      model <- do.call(npreg, next_npreg_fit_args(
+        exdat = index.eval.df,
+        gradients = gradients || (no.ex && ncol(txdat) > 1L), se = TRUE
+      ))
+      index.mean <- model$mean
+      uncertainty <- .np_index_asymptotic_outputs(model, bws$beta, gradients)
+      index.merr <- uncertainty$merr
+      if (gradients) {
+        index.grad <- as.matrix(model$grad) %*% t(as.vector(bws$beta))
+        index.gerr <- uncertainty$gerr
+      }
+      if (no.ex) {
+        index.tgrad <- model$grad
+      } else if (ncol(txdat) > 1L || no.ey || residuals) {
+        training <- do.call(npreg, next_npreg_fit_args(
+          gradients = ncol(txdat) > 1L
+        ))
+        index.tmean <- training$mean
+        index.tgrad <- training$grad
+      }
+    } else if(gradients==FALSE) {
       if (identical(regtype, "lc") && !lc.fixed.progress.route) {
         if (fast.largeh) {
           index.mean <- rep.int(fast.largeh.eval.mean, length(index.eval))
         } else {
-          tww <- npksum(txdat=index.df,
+          tww <- .np_index_kernel_sum(txdat=index.df,
                         tydat=as.matrix(data.frame(tydat,1)),
                         weights=as.matrix(data.frame(tydat,1)),
                         exdat=index.eval.df,
@@ -714,7 +742,7 @@ npindex.sibandwidth <-
           if (fast.largeh) {
             index.tmean <- rep.int(fast.largeh.train.mean, length(tydat))
           } else {
-            tww <- npksum(txdat=index.df,
+            tww <- .np_index_kernel_sum(txdat=index.df,
                           tydat=as.matrix(data.frame(tydat,1)),
                           weights=as.matrix(data.frame(tydat,1)),
                           exdat=index.df,
@@ -787,19 +815,30 @@ npindex.sibandwidth <-
     ## 5/3/2010, jracine, added vcov methods... thanks to Juan Carlos
     ## Escanciano <jescanci@indiana.edu> for pushing me on this for
     ## the Klein and Spady estimator... use index.tmean, index.tgrad
-    ## (training X) - need gradients == TRUE in order for this to
-    ## work.
+    ## (training X). Coefficient inference needs the training derivative,
+    ## independently of whether public gradients are requested.
 
-    if (bws$method == "ichimura" && gradients) {
+    if (se && ncol(txdat) > 1L) {
+      if (!asymptotic.se && !gradients) {
+        training <- do.call(npreg, next_npreg_fit_args(gradients = TRUE))
+        covariance.mean <- training$mean
+        covariance.grad <- as.matrix(training$grad)
+      } else {
+        covariance.mean <- index.tmean
+        covariance.grad <- as.matrix(index.tgrad)
+      }
+    }
+    if (se) {
+      Bvcov <- matrix(0, ncol(txdat), ncol(txdat),
+                      dimnames = list(bws$xnames, bws$xnames))
+    }
+
+    if (bws$method == "ichimura" && se && ncol(txdat) > 1L) {
 
       ## First row & column of covariance matrix `Bvcov' are zero due
       ## to identification condition that beta_1=1. Note the n n^{-1}
       ## n in V^{-1}\Sigma V^{-1} and the \sqrt{n} in the
       ## normalization of \hat\beta will cancel.
-
-      q <- ncol(txdat)
-      Bvcov <- matrix(0,q,q)
-      dimnames(Bvcov) <- list(bws$xnames,bws$xnames)
 
       ## Use the weight matrix so we can compute all expectations with
       ## only one call to npksum (the kernel arguments x\beta do not
@@ -807,7 +846,7 @@ npindex.sibandwidth <-
 
       W <- txdat[,-1,drop=FALSE]
 
-      tyindex <- npksum(txdat = index.df,
+      tyindex <- .np_index_kernel_sum(txdat = index.df,
                         tydat = rep(1,length(tydat)),
                         weights = W,
                         bws = bws$bw,
@@ -816,7 +855,7 @@ npindex.sibandwidth <-
                         ckerorder = bws$ckerorder,
                         ckerbound = bws$ckerbound)$ksum
 
-      tindex <- npksum(txdat = index.df,
+      tindex <- .np_index_kernel_sum(txdat = index.df,
                        bws = bws$bw,
                        bwtype = bws$type,
                        ckertype = bws$ckertype,
@@ -838,11 +877,11 @@ npindex.sibandwidth <-
         xmex <- matrix(xmex,nrow=1,ncol=length(xmex))
       }
 
-      dg.db.xmex <- sweep(xmex, 2L, index.tgrad[,1L], `*`)
+      dg.db.xmex <- sweep(xmex, 2L, covariance.grad[,1L], `*`)
 
-      uhat <- tydat - index.tmean ## Training y and training mean
+      uhat <- tydat - covariance.mean
 
-      Vinv <- chol2inv(chol(dg.db.xmex%*%t(dg.db.xmex)))
+      Vinv <- .np_index_covariance_inverse(dg.db.xmex%*%t(dg.db.xmex))
 
       weighted.score <- sweep(dg.db.xmex, 2L, uhat, `*`)
 
@@ -854,24 +893,21 @@ npindex.sibandwidth <-
 
       ## Now export this in an S3 method...
 
-    } else if (bws$method == "kleinspady" && gradients) {
+    } else if (bws$method == "kleinspady" && se && ncol(txdat) > 1L) {
 
       ## We divide by P(1-P) so test for P=0 or 1...
 
-      keep <- which(index.tmean < 1 & index.tmean > 0)
-      dg.db <- txdat[,-1,drop=FALSE]*index.tgrad[,1]
+      keep <- which(covariance.mean < 1 & covariance.mean > 0)
+      dg.db <- txdat[,-1,drop=FALSE]*covariance.grad[,1]
 
       ## First row & column of covariance matrix are zero due to
       ## identification condition that beta_1=1. Note the n^{-1} in
       ## the E and the \sqrt{n} in the normalization of \hat\beta will
       ## cancel.
 
-      q <- ncol(txdat)
-      Bvcov <- matrix(0,q,q)
-      Bvcov[-1,-1] <- chol2inv(chol(t(dg.db[keep,])%*%(dg.db[keep,]/(index.tmean[keep]*
-        (1-index.tmean[keep])))))
-
-      dimnames(Bvcov) <- list(bws$xnames,bws$xnames)
+      score <- dg.db[keep, , drop = FALSE]
+      Bvcov[-1,-1] <- .np_index_covariance_inverse(
+        t(score) %*% (score / (covariance.mean[keep] * (1-covariance.mean[keep]))))
 
       ## Now export this in an S3 method...
 
@@ -909,7 +945,7 @@ npindex.sibandwidth <-
         rindex <- index[indices]
         if (identical(regtype, "lc")) {
           rindex.df <- data.frame(index = as.vector(rindex))
-          tww <- npksum(txdat = rindex.df,
+          tww <- .np_index_kernel_sum(txdat = rindex.df,
                         tydat = cbind(tydat[indices],1),
                         weights = cbind(tydat[indices],1),
                         exdat = index.eval.df,
@@ -946,7 +982,7 @@ npindex.sibandwidth <-
       }
     }
 
-    if (se){
+    if (bootstrap.se){
 
       progress <- .np_bootstrap_progress_begin(B, "Bootstrapping single-index fit")
       on.exit(.np_bootstrap_progress_end(progress), add = TRUE)
@@ -1022,18 +1058,21 @@ npindex.sibandwidth <-
       trainiseval = no.ex,
       residuals = residuals,
       gradients = gradients,
-      se = se
+      se = se,
+      se.type = if (se) se.type else NULL
     )
     if (se)
       ev.args$merr <- index.merr
+    if (se)
+      ev.args$betavcov <- Bvcov
     if (gradients) {
       ev.args$grad <- index.grad
       ev.args$mean.grad <- colMeans(index.grad)
-      ev.args$betavcov <- Bvcov
     }
     if (se && gradients) {
       ev.args$gerr <- index.gerr
-      ev.args$mean.gerr <- index.mgerr
+      if (bootstrap.se)
+        ev.args$mean.gerr <- index.mgerr
     }
     if (bws$method == "ichimura") {
       if (residuals)
