@@ -1437,12 +1437,12 @@ npregbw.rbandwidth <-
         elapsed = native.elapsed,
         status = "ok",
         message = as.character(native.i$message[1L]),
-        objective = objective.i,
+        objective = raw.objective.i,
         bbe = as.numeric(native.i$blackbox_evaluations[1L]),
         iterations = as.numeric(native.i$iterations[1L]),
         solution = as.numeric(native.i$solution),
         best_point = as.numeric(native.i$best_point),
-        best_objective = objective.i,
+        best_objective = raw.objective.i,
         native = native.i
       )
       native.num.feval.total <<- native.num.feval.total + as.numeric(native.i$total_num.feval[1L])
@@ -1462,7 +1462,7 @@ npregbw.rbandwidth <-
     if (!is.finite(native.best.index) && is.null(point.start) &&
         template$type %in% c("generalized_nn", "adaptive_nn") &&
         length(setup$cont_idx) > 0L) {
-      incumbent <- vapply(native.results, function(z) z$objective, numeric(1L))
+      incumbent <- vapply(native.results, function(z) as.numeric(z$native$objective[1L]), numeric(1L))
       incumbent[!is.finite(incumbent)] <- Inf
       incumbent.index <- if (any(is.finite(incumbent))) which.min(incumbent) else 1L
       recovery.raw.eval <- function(point) {
@@ -2143,6 +2143,8 @@ npregbw.rbandwidth <-
       } else {
         .Machine$double.xmax
       }
+      if (.np_nn_raw_objective_valid(objective))
+        objective <- raw.objective
       list(
         restart = as.integer(restart.index),
         remin = isTRUE(remin),
