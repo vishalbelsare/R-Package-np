@@ -879,7 +879,7 @@ npindex.sibandwidth <-
 
     if (gradients){
       boofun = function(data, indices){
-        rindex <- txdat[indices,] %*% bws$beta
+        rindex <- index[indices]
         rindex.df <- data.frame(index = as.vector(rindex))
         boot.args <- list(
           txdat = rindex.df,
@@ -906,7 +906,7 @@ npindex.sibandwidth <-
 
     } else {
       boofun = function(data, indices){
-        rindex = txdat[indices,] %*% bws$beta
+        rindex <- index[indices]
         if (identical(regtype, "lc")) {
           rindex.df <- data.frame(index = as.vector(rindex))
           tww <- npksum(txdat = rindex.df,
