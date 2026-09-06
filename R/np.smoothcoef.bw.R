@@ -2618,6 +2618,7 @@ npscoefbw.scbandwidth <-
       remin = isTRUE(opt.args$nomad.remin),
       nomad.opts = if (is.null(opt.args$nomad.opts)) list() else opt.args$nomad.opts,
       native.r.bridge = TRUE,
+      preserve.eval.error = TRUE,
       source = source,
       reason = reason,
       progress_label = progress_label,

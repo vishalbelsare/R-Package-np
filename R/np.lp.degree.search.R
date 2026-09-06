@@ -2606,7 +2606,8 @@
                              reason = NULL,
                              progress_label = NULL,
                              recover_start = NULL,
-                             prepare_starts = NULL) {
+                             prepare_starts = NULL,
+                             preserve.eval.error = FALSE) {
   engine <- match.arg(engine)
   direction <- match.arg(direction)
   if (!is.null(recover_start) && !is.function(recover_start))
@@ -2631,6 +2632,8 @@
   state$best_payload <- NULL
   state$interrupted <- FALSE
   state$error <- NULL
+  state$preserve.eval.error <- isTRUE(preserve.eval.error)
+  state$evaluator.error <- NULL
   state$progress_state <- NULL
   state$nomad.time <- NA_real_
   state$powell.time <- NA_real_
@@ -2753,6 +2756,8 @@
   }
 
   wrapped_eval <- function(point) {
+    if (!is.null(state$evaluator.error))
+      stop(state$evaluator.error)
     point <- as.numeric(point)
     state$visit_id <- state$visit_id + 1L
     started <- proc.time()[3L]
@@ -2771,6 +2776,12 @@
         NULL
       },
       error = function(e) {
+        if (state$preserve.eval.error &&
+            !inherits(e, "np_nn_candidate_invalid")) {
+          if (is.null(state$evaluator.error))
+            state$evaluator.error <- e
+          stop(state$evaluator.error)
+        }
         status <<- "error"
         msg <<- conditionMessage(e)
         NULL
@@ -2896,6 +2907,8 @@
         geometry = fixed.degree.geometry,
         where = "native NOMAD R-callback route"
       )
+      if (!is.null(state$evaluator.error))
+        stop(state$evaluator.error)
       return(native.call)
     }
 
@@ -3042,6 +3055,8 @@
           detail = state$error
         )
       }
+      if (!is.null(state$evaluator.error))
+        stop(state$evaluator.error)
       stop(state$error, call. = FALSE)
     }
 
@@ -3167,6 +3182,8 @@
           detail = state$error
         )
       }
+      if (!is.null(state$evaluator.error))
+        stop(state$evaluator.error)
       stop(state$error, call. = FALSE)
     }
     post_restart_best <- if (is.null(state$best_record) || is.null(state$best_record$objective)) {

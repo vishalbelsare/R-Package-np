@@ -11,6 +11,10 @@
 * Kernel-sum formula calls with a subset again allow data to be omitted.
 * The internal single-index first-start restoration control is documented.
 
+* Serial smooth-coefficient NOMAD searches restore the first unexpected evaluator
+  condition after native completion, before further evaluation or payload/Powell
+  work. Typed invalid candidates retain their existing handling.
+
 * Fitted regression releases its owned buffers and partial trees when an error
   leaves the native fit, preserving the original condition and numerical path.
 
