@@ -1,4 +1,4 @@
-test_that("raw certification retains the selected native MADS objective", {
+test_that("raw certification publishes its score and retains native diagnostics", {
   skip_if_not_installed("crs", minimum_version = "0.15.46")
   old <- options(np.messages = FALSE, np.tree = FALSE, np.extendednn = FALSE)
   on.exit(options(old), add = TRUE)
@@ -9,9 +9,11 @@ test_that("raw certification retains the selected native MADS objective", {
     if (family == "npudensbw") args$bwmethod <- "cv.ls" else args$ngrid <- 7L
     bw <- do.call(get(family, asNamespace("np")), args)
     selected <- bw$nomad.restart.results[[bw$nomad.best.restart]]
-    native <- as.numeric(selected$native$objective)
-    if (family == "npudensbw") native <- -native
-    expect_identical(as.numeric(bw$fval), native)
+    certificate <- as.numeric(selected$objective)
+    if (family == "npudensbw") certificate <- -certificate
+    expect_identical(as.numeric(bw$fval), certificate)
+    expect_identical(as.numeric(selected$best_objective),
+                     as.numeric(selected$native$objective))
     raw.args <- list(dat = x, bws = bw, eval.only = TRUE, invalid.penalty = "dbmax", nmulti = 1L)
     if (family == "npudistbw") raw.args$ngrid <- 7L
     raw.name <- if (family == "npudensbw") "npudensbw.bandwidth" else "npudistbw.dbandwidth"

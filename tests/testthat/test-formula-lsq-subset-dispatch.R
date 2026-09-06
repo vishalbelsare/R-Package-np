@@ -85,7 +85,8 @@ test_that("least-squares formula subsets retain omission and environment policy"
 test_that("least-squares dispatch retains non-subset dots and promise caching", {
   calls <- 0L
   forward <- function(...) {
-    args <- .nplsqreg_formula_dispatch_args(...)
+    args <- .nplsqreg_formula_dispatch_args(
+      nplsqreg.formula, substitute(list(...))[-1L], environment())
     all <- list(...)
     list(args = args, all = all)
   }
@@ -93,7 +94,9 @@ test_that("least-squares dispatch retains non-subset dots and promise caching", 
                unnamed = 3, FALSE)
   expect_identical(calls, 1L)
   expect_identical(z$args, z$all[-2L])
-  expect_identical(.nplsqreg_formula_dispatch_args(data = 1,
+  lazy <- function(...) .nplsqreg_formula_dispatch_args(
+    nplsqreg.formula, substitute(list(...))[-1L], environment())
+  expect_identical(lazy(data = 1,
     subset = stop("must remain lazy")), list(data = 1))
-  expect_identical(.nplsqreg_formula_dispatch_args(1, sub = stop("lazy")), setNames(list(1), ""))
+  expect_identical(lazy(1, sub = stop("lazy")), setNames(list(1), ""))
 })
