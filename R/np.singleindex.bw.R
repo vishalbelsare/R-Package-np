@@ -233,10 +233,15 @@ npindexbw.NULL <-
 .npindex_random_start_bandwidth <- function(fit,
                                             bwtype,
                                             nobs,
-                                            start.controls = .npindexbw_h_start_controls()) {
+                                            start.controls = .npindexbw_h_start_controls(),
+                                            retain.scale = FALSE) {
   if (identical(bwtype, "fixed")) {
-    return(runif(1, min = start.controls$scale.factor.init.lower, max = start.controls$scale.factor.init.upper) *
-             .npindex_start_bandwidth_scale(fit = fit, nobs = nobs))
+    u <- runif(1, min = start.controls$scale.factor.init.lower, max = start.controls$scale.factor.init.upper)
+    scale <- .npindex_start_bandwidth_scale(fit = fit, nobs = nobs)
+    h <- u * scale
+    if (isTRUE(retain.scale))
+      return(list(h = h, scale = scale))
+    return(h)
   }
 
   upper <- max(1L, as.integer(nobs) - 1L)
@@ -244,18 +249,148 @@ npindexbw.NULL <-
 }
 
 .npindex_random_restart_bandwidth <- function(xmat, beta, fit, bwtype, nobs,
-                                               start.controls, fixed.h.lower) {
+                                               start.controls, fixed.h.lower,
+                                               retain.scale = FALSE) {
   if (identical(bwtype, "fixed") && length(beta))
     fit <- .npindex_index_from_beta_tail(xmat, beta)
   h <- .npindex_random_start_bandwidth(
-    fit = fit, bwtype = bwtype, nobs = nobs, start.controls = start.controls
+    fit = fit, bwtype = bwtype, nobs = nobs, start.controls = start.controls,
+    retain.scale = retain.scale
   )
   if (!identical(bwtype, "fixed"))
     return(h)
-  .npindex_finalize_bandwidth(
+  details <- if (isTRUE(retain.scale)) h else NULL
+  if (!is.null(details))
+    h <- details$h
+  h <- .npindex_finalize_bandwidth(
     h = h, bwtype = bwtype, nobs = nobs, lower = fixed.h.lower,
     where = "npindexbw automatic restart"
   )
+  if (!is.null(details)) {
+    details$h <- h
+    return(details)
+  }
+  h
+}
+
+.npindexbw_restore_start_eligible <- function(bws, spec, optim.method, owner) {
+  degree <- as.integer(spec$degree.engine)
+  bound <- if (is.null(bws$ckerbound) || !length(bws$ckerbound)) "none" else
+    as.character(bws$ckerbound[1L])
+  kernel <- as.character(bws$ckertype[1L])
+  isTRUE(owner) && identical(bws$type, "fixed") && identical(bound, "none") &&
+    length(degree) > 0L && all(degree == 0L) &&
+    (identical(kernel, "uniform") ||
+       (identical(kernel, "epanechnikov") && identical(as.integer(bws$ckerorder), 2L))) &&
+    optim.method %in% c("Nelder-Mead", "BFGS", "CG")
+}
+
+.npindexbw_first_scalar_guard <- function(objective.method, to.public = identity) {
+  guard <- new.env(parent = emptyenv())
+  token <- new.env(parent = emptyenv())
+  logical.id <- 0L
+  current <- NULL
+  guard$active <- FALSE
+  guard$observe <- function(raw, point) {
+    if (!isTRUE(guard$active))
+      return(invisible(NULL))
+    point <- as.double(point)
+    if (is.null(current) || isTRUE(current$seen) ||
+        length(point) != current$dimension || any(!is.finite(point)) ||
+        !identical(point, current$expected.point))
+      stop("internal error: npindexbw first scalar has a stale or mismatched raw witness",
+           call. = FALSE)
+    if (!is.numeric(raw) || length(raw) != 1L || !is.finite(raw))
+      stop("internal error: npindexbw first scalar lacks a normal finite raw objective",
+           call. = FALSE)
+    current$seen <- TRUE
+    current$point <- point
+    current$invalid <- identical(as.double(raw), .Machine$double.xmax)
+    if (isTRUE(current$invalid)) {
+      stop(structure(list(message = "npindexbw private invalid first scalar",
+        call = NULL, token = token, logical.id = logical.id,
+        start = current$start, retry = current$retry, attempt = current$attempt,
+        point = point), class = c("np_index_first_scalar_invalid", "error", "condition")))
+    }
+    invisible(NULL)
+  }
+  guard$run <- function(args, automatic, held, scale, lower, h, start, retry,
+                        upper = Inf) {
+    logical.id <<- logical.id + 1L
+    original.h <- as.double(h)
+    h <- original.h
+    expansion <- 0L
+    fn <- args$fn
+    beta.search <- if (isTRUE(held)) args$par else args$par[-length(args$par)]
+    expected.beta <- as.double(to.public(beta.search))
+    on.exit({ guard$active <- FALSE; current <<- NULL }, add = TRUE)
+    description <- function(attempts) sprintf(
+      "npindexbw %s/%s start %d retry %d: %d starting scalar(s), h %s to %s",
+      objective.method, args$method, start, retry, attempts,
+      format(original.h, digits = 17L, scientific = TRUE),
+      format(h, digits = 17L, scientific = TRUE))
+    fail <- function(reason) stop(paste0(description(expansion + 1L), "; ", reason,
+      ". The starting h may be too small; review scale.factor.init, random-start controls or explicit h."),
+      call. = FALSE)
+    repeat {
+      first <- TRUE
+      state <- new.env(parent = emptyenv())
+      state$seen <- FALSE
+      state$invalid <- FALSE
+      state$dimension <- length(args$par) + as.integer(held)
+      state$h <- h
+      state$expected.point <- c(expected.beta, h)
+      state$start <- start
+      state$retry <- retry
+      state$attempt <- expansion + 1L
+      current <<- state
+      args$fn <- function(param, ...) {
+        if (!first)
+          return(fn(param, ...))
+        first <<- FALSE
+        if (!identical(as.double(param), as.double(args$par)))
+          stop("internal error: npindexbw first scalar does not match the current optim start",
+               call. = FALSE)
+        guard$active <- TRUE
+        on.exit({ guard$active <- FALSE }, add = TRUE)
+        value <- fn(param, ...)
+        if (!isTRUE(state$seen))
+          stop("internal error: npindexbw first scalar returned without its current ordinary raw objective",
+               call. = FALSE)
+        if (expansion > 0L)
+          .np_progress_note(paste0(description(expansion + 1L), "; restored a raw-valid start"))
+        value
+      }
+      result <- tryCatch(do.call(optim, args), np_index_first_scalar_invalid = function(e) {
+        if (!identical(e$token, token) || !identical(e$logical.id, logical.id) ||
+            !identical(e$start, start) || !identical(e$retry, retry) ||
+            !identical(e$attempt, expansion + 1L) || !isTRUE(state$invalid) ||
+            !identical(e$point, state$point))
+          stop(e)
+        e
+      })
+      if (!inherits(result, "np_index_first_scalar_invalid"))
+        return(result)
+      if (isTRUE(held))
+        fail("raw-invalid held bandwidth; restoration is disabled")
+      if (!isTRUE(automatic))
+        fail("raw-invalid explicit initial bandwidth; restoration is disabled")
+      if (length(scale) != 1L || !is.finite(scale) || scale <= 0 ||
+          length(h) != 1L || !is.finite(h) || h <= 0)
+        fail("restoration requires a positive finite index scale and h")
+      if (expansion >= 8L)
+        fail("raw-invalid start exhausted the eight-doubling restoration budget")
+      next.h <- h * 2
+      if (!is.finite(next.h) || next.h <= h)
+        fail("restoration cannot produce a finite strictly larger h")
+      if ((!is.null(lower) && next.h < lower) || next.h > upper)
+        fail("restoration would violate the existing search bounds")
+      h <- next.h
+      args$par[length(args$par)] <- h
+      expansion <- expansion + 1L
+    }
+  }
+  guard
 }
 
 .npindexbw_prepare_fixed_starts <- function(starts, xmat, beta.coord, h.scale) {
@@ -956,7 +1091,8 @@ npindexbw.NULL <-
         xdat = xdat,
         ydat = ydat,
         bws = tbw,
-        .certify.selected = .certify.selected
+        .certify.selected = .certify.selected,
+        .restore.first.start = FALSE
       ),
       opt.args
     )
@@ -2018,6 +2154,7 @@ npindexbw.sibandwidth <-
            scale.factor.init.upper = 2.0,
            scale.factor.init = 0.5,
            scale.factor.search.lower = NULL,
+           .restore.first.start = TRUE,
            ...){
 
     dots <- list(...)
@@ -2039,6 +2176,7 @@ npindexbw.sibandwidth <-
       .certify.selected,
       ".certify.selected"
     )
+    .restore.first.start <- npValidateScalarLogical(.restore.first.start, ".restore.first.start")
     only.optimize.beta <- npValidateScalarLogical(only.optimize.beta, "only.optimize.beta")
     nmulti <- npValidateNmulti(nmulti)
     .np_progress_bandwidth_set_total(nmulti)
@@ -2149,6 +2287,11 @@ npindexbw.sibandwidth <-
             invisible(NULL)
           }
           fixed.h.lower <- NULL
+          start.scale <- NULL
+          start.guard <- if (.npindexbw_restore_start_eligible(
+            bws, objective.spec, optim.method,
+            isTRUE(.restore.first.start) && isTRUE(.certify.selected)
+          )) .npindexbw_first_scalar_guard(bws$method, beta.coord$to_public) else NULL
 
           ## Note - there are two methods currently implemented, Ichimura's
           ## least squares approach and Klein and Spady's likelihood approach.
@@ -2196,6 +2339,8 @@ npindexbw.sibandwidth <-
               )
               num.feval.fast.overall <<- num.feval.fast.overall +
                 as.numeric(objective$num.feval.fast[1L])
+              if (!is.null(start.guard) && isTRUE(start.guard$active))
+                start.guard$observe(objective$objective, c(beta, h))
               as.numeric(.npindexbw_map_ichimura_outer_result(
                 objective,
                 ichimuraMaxPenalty
@@ -2257,6 +2402,8 @@ npindexbw.sibandwidth <-
               )
               num.feval.fast.overall <<- num.feval.fast.overall +
                 as.numeric(objective$num.feval.fast[1L])
+              if (!is.null(start.guard) && isTRUE(start.guard$active))
+                start.guard$observe(objective$objective, c(beta, h))
               as.numeric(.npindexbw_map_kleinspady_outer_result(
                 objective,
                 kleinspadyMaxPenalty
@@ -2323,7 +2470,8 @@ npindexbw.sibandwidth <-
               } else { beta = numeric(0) }
               fit <- .npindex_index_from_beta_tail(xmat, beta)
               fixed.h.lower <- if (identical(bws$type, "fixed")) {
-                h.start.controls$scale.factor.search.lower * .npindex_start_bandwidth_scale(fit = fit, nobs = nobs)
+                start.scale <- .npindex_start_bandwidth_scale(fit = fit, nobs = nobs)
+                h.start.controls$scale.factor.search.lower * start.scale
               } else {
                 NULL
               }
@@ -2349,7 +2497,7 @@ npindexbw.sibandwidth <-
               ols.beta <- .npindex_ols_beta_tail(ols.fit)
               beta.length <- length(ols.beta)
               beta <- runif(beta.length,min=0.5,max=1.5)*ols.beta
-              if (!only.optimize.beta)
+              if (!only.optimize.beta) {
                 h <- .npindex_random_restart_bandwidth(
                   xmat = xmat,
                   beta = beta,
@@ -2357,8 +2505,14 @@ npindexbw.sibandwidth <-
                   bwtype = bws$type,
                   nobs = nobs,
                   start.controls = h.start.controls,
-                  fixed.h.lower = fixed.h.lower
+                  fixed.h.lower = fixed.h.lower,
+                  retain.scale = !is.null(start.guard)
                 )
+                if (!is.null(start.guard)) {
+                  start.scale <- h$scale
+                  h <- h$h
+                }
+              }
             }
 
             beta.search <- beta.coord$to_search(beta)
@@ -2374,14 +2528,21 @@ npindexbw.sibandwidth <-
             if (only.optimize.beta) {
               optim.base.args$h <- h
             }
-            suppressWarnings(optim.return <- do.call(optim, optim.base.args))
+            suppressWarnings(optim.return <- if (is.null(start.guard)) {
+              do.call(optim, optim.base.args)
+            } else {
+              start.guard$run(optim.base.args,
+                automatic = i > 1L || bws$bw == 0, held = only.optimize.beta,
+                scale = start.scale, lower = fixed.h.lower, h = h,
+                start = i, retry = 0L)
+            })
             attempts <- 0
             while((optim.return$convergence != 0) && (attempts <= optim.maxattempts)) {
               attempts <- attempts + 1
               ols.beta <- .npindex_ols_beta_tail(ols.fit)
               beta.length <- length(ols.beta)
               beta <- runif(beta.length,min=0.5,max=1.5)*ols.beta
-              if(!only.optimize.beta)
+              if(!only.optimize.beta) {
                 h <- .npindex_random_restart_bandwidth(
                   xmat = xmat,
                   beta = beta,
@@ -2389,8 +2550,14 @@ npindexbw.sibandwidth <-
                   bwtype = bws$type,
                   nobs = nobs,
                   start.controls = h.start.controls,
-                  fixed.h.lower = fixed.h.lower
+                  fixed.h.lower = fixed.h.lower,
+                  retain.scale = !is.null(start.guard)
                 )
+                if (!is.null(start.guard)) {
+                  start.scale <- h$scale
+                  h <- h$h
+                }
+              }
 
               if(optim.return$convergence == 1){
                 if(optim.control$maxit < (2^32/10))
@@ -2415,7 +2582,14 @@ npindexbw.sibandwidth <-
               if (only.optimize.beta) {
                 optim.base.args$h <- h
               }
-              suppressWarnings(optim.return <- do.call(optim, optim.base.args))
+              suppressWarnings(optim.return <- if (is.null(start.guard)) {
+                do.call(optim, optim.base.args)
+              } else {
+                start.guard$run(optim.base.args,
+                  automatic = !only.optimize.beta, held = only.optimize.beta,
+                  scale = start.scale, lower = fixed.h.lower, h = h,
+                  start = i, retry = attempts)
+              })
             }
 
             if(optim.return$convergence != 0)
