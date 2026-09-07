@@ -19,6 +19,10 @@
   bandwidth call's existing environment, so wrapper-local data remains usable
   after the wrapper returns and after saving and reloading the bandwidth object.
 
+* Single-index and location-scale quantile NOMAD searches now preserve unexpected
+  callback errors instead of returning a surviving candidate. Legitimate typed
+  candidate rejection keeps its existing penalty; successful search arithmetic
+  and evaluation budgets are unchanged.
 
 * Public plot arguments now use dotted names: data.overlay, data.rug,
   factor.boxplot, boxplot.outliers, coef.index, common.scale, proper.method,

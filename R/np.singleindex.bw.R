@@ -1581,6 +1581,7 @@ npindexbw.NULL <-
     remin = isTRUE(opt.args$nomad.remin),
     nomad.opts = if (is.null(opt.args$nomad.opts)) list() else opt.args$nomad.opts,
     native.r.bridge = TRUE,
+    preserve.eval.error = TRUE,
     handoff_before_build = identical(degree.search$engine, "nomad+powell"),
     prepare_starts = if (fixed.nomad && !isTRUE(opt.args$only.optimize.beta)) function(starts)
       .npindexbw_prepare_fixed_starts(starts, x.clean, beta.coord,

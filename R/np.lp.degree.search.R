@@ -2634,6 +2634,7 @@
   state$error <- NULL
   state$preserve.eval.error <- isTRUE(preserve.eval.error)
   state$evaluator.error <- NULL
+  state$evaluator.interrupt <- NULL
   state$progress_state <- NULL
   state$nomad.time <- NA_real_
   state$powell.time <- NA_real_
@@ -2655,6 +2656,18 @@
       .np_progress_runtime$bandwidth_state <- value
     }
     invisible(value)
+  }
+
+  abort_progress <- function(detail) {
+    if (!is.null(state$progress_state)) {
+      # Diagnostic rendering must not replace the condition that ended search.
+      tryCatch({
+        state$progress_state <- .np_progress_abort(
+          state = state$progress_state, detail = detail)
+      }, error = function(e) invisible(NULL),
+         interrupt = function(e) invisible(NULL))
+    }
+    invisible(NULL)
   }
 
   nomad.nmulti <- npValidateNmulti(nmulti)
@@ -2755,59 +2768,10 @@
     invisible(NULL)
   }
 
-  wrapped_eval <- function(point) {
-    if (!is.null(state$evaluator.error))
-      stop(state$evaluator.error)
-    point <- as.numeric(point)
-    state$visit_id <- state$visit_id + 1L
-    started <- proc.time()[3L]
-    status <- "ok"
-    msg <- NULL
-    objective <- NA_real_
-    degree <- integer(0)
-    num.feval <- NA_real_
-    num.feval.fast <- NA_real_
-    admissible <- TRUE
-
-    result <- tryCatch(
-      eval_fun(point),
-      interrupt = function(e) {
-        state$interrupted <- TRUE
-        NULL
-      },
-      error = function(e) {
-        if (state$preserve.eval.error &&
-            !inherits(e, "np_nn_candidate_invalid")) {
-          if (is.null(state$evaluator.error))
-            state$evaluator.error <- e
-          stop(state$evaluator.error)
-        }
-        status <<- "error"
-        msg <<- conditionMessage(e)
-        NULL
-      }
-    )
-
-    if (isTRUE(state$interrupted))
-      stop(structure(list(message = "interrupt"), class = c("interrupt", "condition")))
-
-    if (!is.null(result)) {
-      if (!is.list(result) || is.null(result$objective) || is.null(result$degree))
-        stop("NOMAD fixed-point evaluator must return a list containing 'objective' and 'degree'")
-
-      objective <- as.numeric(result$objective[1L])
-      degree <- as.integer(result$degree)
-      if (!is.null(result$num.feval))
-        num.feval <- as.numeric(result$num.feval[1L])
-      if (!is.null(result$num.feval.fast))
-        num.feval.fast <- as.numeric(result$num.feval.fast[1L])
-      if (!is.null(result[["admissible"]])) {
-        admissible <- result[["admissible"]]
-        if (!is.logical(admissible) || length(admissible) != 1L || is.na(admissible))
-          stop("NOMAD evaluator 'admissible' must be TRUE or FALSE", call. = FALSE)
-      }
-    }
-
+  record_evaluation <- function(point, started, status = "ok", msg = NULL,
+                                objective = NA_real_, degree = integer(0),
+                                num.feval = NA_real_, num.feval.fast = NA_real_,
+                                admissible = TRUE) {
     state$eval_id <- state$eval_id + 1L
     rec <- list(
       eval_id = state$eval_id,
@@ -2845,6 +2809,71 @@
     }
 
     if (identical(direction, "min")) Inf else .Machine$double.xmax
+  }
+
+  wrapped_eval <- function(point) {
+    if (!is.null(state$evaluator.error))
+      stop(state$evaluator.error)
+    if (!is.null(state$evaluator.interrupt))
+      stop(state$evaluator.interrupt)
+    started <- proc.time()[3L]
+    phase <- "input"
+    tryCatch({
+      point <- as.numeric(point)
+      state$visit_id <- state$visit_id + 1L
+      phase <- "evaluate"
+      result <- eval_fun(point)
+      phase <- "result"
+      objective <- NA_real_
+      degree <- integer(0)
+      num.feval <- num.feval.fast <- NA_real_
+      admissible <- TRUE
+      if (!is.null(result)) {
+        if (!is.list(result) || is.null(result$objective) || is.null(result$degree))
+          stop("NOMAD fixed-point evaluator must return a list containing 'objective' and 'degree'")
+        objective <- as.numeric(result$objective[1L])
+        degree <- as.integer(result$degree)
+        if (!is.null(result$num.feval))
+          num.feval <- as.numeric(result$num.feval[1L])
+        if (!is.null(result$num.feval.fast))
+          num.feval.fast <- as.numeric(result$num.feval.fast[1L])
+        if (!is.null(result[["admissible"]])) {
+          admissible <- result[["admissible"]]
+          if (!is.logical(admissible) || length(admissible) != 1L || is.na(admissible))
+            stop("NOMAD evaluator 'admissible' must be TRUE or FALSE", call. = FALSE)
+        }
+      }
+      record_evaluation(point, started, objective = objective, degree = degree,
+                        num.feval = num.feval, num.feval.fast = num.feval.fast,
+                        admissible = admissible)
+    }, interrupt = function(e) {
+      state$interrupted <- TRUE
+      state$evaluator.interrupt <- e
+      stop(e)
+    }, error = function(e) {
+      # Rejection belongs only to exploratory evaluation, not conversion or
+      # publication. One callback-wide catcher also protects incumbent updates.
+      rejection <- identical(phase, "evaluate") &&
+        (!state$preserve.eval.error || inherits(e, "np_nn_candidate_invalid"))
+      if (rejection) {
+        # A failure while recording a rejection is not itself a rejection.
+        return(tryCatch(
+          record_evaluation(point, started, status = "error",
+                            msg = conditionMessage(e)),
+          error = function(record.error) {
+            if (state$preserve.eval.error)
+              state$evaluator.error <- record.error
+            stop(record.error)
+          }
+        ))
+      }
+      if (state$preserve.eval.error) {
+        if (is.null(state$evaluator.error))
+          state$evaluator.error <- e
+        stop(state$evaluator.error)
+      }
+      stop(e)
+    })
   }
 
   baseline.degree <- if (is.null(start_degree)) {
@@ -2901,14 +2930,16 @@
         display.nomad.progress = display.nomad.progress
       )
       native.value <- native.call$value
+      if (!is.null(state$evaluator.error))
+        stop(state$evaluator.error)
+      if (!is.null(state$evaluator.interrupt))
+        stop(state$evaluator.interrupt)
       .np_nomad_native_status(native.value, "native NOMAD R-callback route")
       .np_nomad_assert_fixed_degree_solution(
         solution = native.value$solution,
         geometry = fixed.degree.geometry,
         where = "native NOMAD R-callback route"
       )
-      if (!is.null(state$evaluator.error))
-        stop(state$evaluator.error)
       return(native.call)
     }
 
@@ -2992,10 +3023,13 @@
       },
       interrupt = function(e) {
         state$interrupted <- TRUE
+        state$evaluator.interrupt <- e
         NULL
       },
       error = function(e) {
         state$error <- conditionMessage(e)
+        if (state$preserve.eval.error && is.null(state$evaluator.error))
+          state$evaluator.error <- e
         NULL
       }
     )
@@ -3049,12 +3083,7 @@
       break
 
     if (is.null(solution_i) && !is.null(state$error)) {
-      if (!is.null(state$progress_state)) {
-        state$progress_state <- .np_progress_abort(
-          state = state$progress_state,
-          detail = state$error
-        )
-      }
+      abort_progress(state$error)
       if (!is.null(state$evaluator.error))
         stop(state$evaluator.error)
       stop(state$error, call. = FALSE)
@@ -3128,10 +3157,13 @@
       },
       interrupt = function(e) {
         state$interrupted <- TRUE
+        state$evaluator.interrupt <- e
         NULL
       },
       error = function(e) {
         state$error <- conditionMessage(e)
+        if (state$preserve.eval.error && is.null(state$evaluator.error))
+          state$evaluator.error <- e
         NULL
       }
     )
@@ -3176,12 +3208,7 @@
       }
     )
     if (is.null(solution_i) && !is.null(state$error)) {
-      if (!is.null(state$progress_state)) {
-        state$progress_state <- .np_progress_abort(
-          state = state$progress_state,
-          detail = state$error
-        )
-      }
+      abort_progress(state$error)
       if (!is.null(state$evaluator.error))
         stop(state$evaluator.error)
       stop(state$error, call. = FALSE)
@@ -3195,6 +3222,10 @@
         .np_degree_better(post_restart_best, pre_restart_best, direction = direction)) {
       best_solution <- solution_i
     }
+  }
+  if (!is.null(state$evaluator.interrupt)) {
+    abort_progress(conditionMessage(state$evaluator.interrupt))
+    stop(state$evaluator.interrupt)
   }
   state$nomad.time <- nomad.elapsed
   state$restart_results <- restart_results
@@ -3241,12 +3272,7 @@
       interrupted = state$interrupted
     ),
     error = function(e) {
-      if (!is.null(state$progress_state)) {
-        state$progress_state <- .np_progress_abort(
-          state = state$progress_state,
-          detail = conditionMessage(e)
-        )
-      }
+      abort_progress(conditionMessage(e))
       stop(e)
     }
   )

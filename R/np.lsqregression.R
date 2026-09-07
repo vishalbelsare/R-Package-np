@@ -940,6 +940,7 @@ nplsqregbw <-
     remin = isTRUE(opt.args$nomad.remin),
     nomad.opts = nomad.opts,
     native.r.bridge = TRUE,
+    preserve.eval.error = TRUE,
     start.lower = c(bw.start.bounds$lower, delta.bounds[1L], degree.search$lower),
     start.upper = c(bw.start.bounds$upper, delta.bounds[2L], degree.search$upper),
     coordinate.roles = coordinate.roles,
