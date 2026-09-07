@@ -481,7 +481,7 @@
                                        y = NULL,
                                        output = c("matrix", "apply")) {
   output <- match.arg(output)
-  out <- npreghat(
+  out <- .npreghat_complete(
     bws = .np_indexhat_rbw(bws = bws, idx.train = idx.train),
     txdat = idx.train,
     exdat = idx.eval,
@@ -502,7 +502,7 @@
 }
 
 .np_indexhat_lp_mean_matrix <- function(bws, idx.train, idx.eval) {
-  out <- npreghat(
+  out <- .npreghat_complete(
     bws = .np_indexhat_rbw(bws = bws, idx.train = idx.train),
     txdat = idx.train,
     exdat = idx.eval,
@@ -519,7 +519,7 @@
 }
 
 .np_indexhat_gradient_matrix <- function(bws, idx.train, idx.eval) {
-  out <- npreghat(
+  out <- .npreghat_complete(
     bws = .np_indexhat_rbw(bws = bws, idx.train = idx.train),
     txdat = idx.train,
     exdat = idx.eval,
@@ -1183,7 +1183,7 @@ npplreghat <-
     resx.eval <- matrix(0.0, nrow = m, ncol = p)
 
     if (matrix.output) {
-      H.y.eval <- npreghat(
+      H.y.eval <- .npreghat_complete(
         bws = bws$bw$yzbw,
         txdat = tzdat,
         exdat = ezdat,
@@ -1191,13 +1191,13 @@ npplreghat <-
       )
 
       for (j in seq_len(p)) {
-        xhat.train <- as.vector(npreghat(
+        xhat.train <- as.vector(.npreghat_complete(
           bws = bws$bw[[j + 1L]],
           txdat = tzdat,
           y = x.train.num[, j],
           output = "apply"
         ))
-        xhat.eval <- as.vector(npreghat(
+        xhat.eval <- as.vector(.npreghat_complete(
           bws = bws$bw[[j + 1L]],
           txdat = tzdat,
           exdat = ezdat,
@@ -1210,7 +1210,7 @@ npplreghat <-
       }
 
       qrR <- qr(resx.train, tol = .Machine$double.eps)
-      H.y.train <- npreghat(
+      H.y.train <- .npreghat_complete(
         bws = bws$bw$yzbw,
         txdat = tzdat,
         output = "matrix"
@@ -1230,13 +1230,13 @@ npplreghat <-
       stop("number of rows in 'y' must equal number of training rows")
 
     for (j in seq_len(p)) {
-      xhat.train <- npreghat(
+      xhat.train <- .npreghat_complete(
         bws = bws$bw[[j + 1L]],
         txdat = tzdat,
         y = x.train.num[, j],
         output = "apply"
       )
-      xhat.eval <- npreghat(
+      xhat.eval <- .npreghat_complete(
         bws = bws$bw[[j + 1L]],
         txdat = tzdat,
         exdat = ezdat,
@@ -1249,7 +1249,7 @@ npplreghat <-
 
     qrR <- qr(resx.train, tol = .Machine$double.eps)
 
-    Hy.eval <- npreghat(
+    Hy.eval <- .npreghat_complete(
       bws = bws$bw$yzbw,
       txdat = tzdat,
       exdat = ezdat,
@@ -1259,7 +1259,7 @@ npplreghat <-
     if (!is.matrix(Hy.eval))
       Hy.eval <- matrix(Hy.eval, ncol = ncol(yy))
 
-    Hy.train <- npreghat(
+    Hy.train <- .npreghat_complete(
       bws = bws$bw$yzbw,
       txdat = tzdat,
       y = yy,

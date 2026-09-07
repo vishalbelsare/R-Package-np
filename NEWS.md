@@ -24,6 +24,12 @@
   candidate rejection keeps its existing penalty; successful search arithmetic
   and evaluation budgets are unchanged.
 
+* External local-polynomial npreghat mean rows with finite moment systems but
+  exactly zero computed kernel weights now return NA with one informative
+  warning. Defined rows, kernel accumulation, solver arithmetic and internal
+  complete-operator failure behavior are unchanged. The same row contract
+  covers matrix, apply, constraint and recomputed prediction outputs.
+
 * Public plot arguments now use dotted names: data.overlay, data.rug,
   factor.boxplot, boxplot.outliers, coef.index, common.scale, proper.method,
   proper.control, boot.control, grid.control and render.control. Plot helpers

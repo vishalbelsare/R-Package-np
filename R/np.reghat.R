@@ -165,10 +165,33 @@ npreghat <-
     )
 }
 
-.npreghat_native_ridge_used <- function(H, neval, where) {
+# Internal consumers require a complete finite operator, even at external rows.
+.npreghat_complete <- function(...) {
+  npreghat(..., .np.require.finite = TRUE)
+}
+
+.npreghat_finish_empty_rows <- function(value, empty.rows = NULL, defer = FALSE) {
+  if (is.null(empty.rows))
+    return(value)
+  if (defer) {
+    attr(value, ".np.empty.rows") <- empty.rows
+    return(value)
+  }
+  rows <- which(empty.rows == 1L)
+  .np_warning(sprintf(
+    "npreghat: all computed kernel weights are zero at %d external evaluation row(s) (%s%s); returning NA for those rows",
+    length(rows), paste(head(rows, 8L), collapse = ", "),
+    if (length(rows) > 8L) ", ..." else ""), call. = FALSE)
+  value
+}
+
+.npreghat_native_ridge_used <- function(H, neval, where, empty.rows = NULL) {
   ridge.used <- attr(H, "ridge.used", exact = TRUE)
-  if (!is.double(ridge.used) || length(ridge.used) != neval ||
-      any(!is.finite(ridge.used)) || any(ridge.used < 0)) {
+  valid.shape <- is.double(ridge.used) && length(ridge.used) == neval
+  valid <- if (valid.shape) is.finite(ridge.used) & ridge.used >= 0 else FALSE
+  if (valid.shape && !is.null(empty.rows))
+    valid[empty.rows == 1L] <- is.na(ridge.used[empty.rows == 1L])
+  if (!valid.shape || !all(valid)) {
     stop(sprintf("invalid canonical ridge transcript in %s", where),
          call. = FALSE)
   }
@@ -951,7 +974,8 @@ npreghat <-
                                                           s = NULL,
                                                           return.hat = FALSE,
                                                           leave.one.out = FALSE,
-                                                          sigtest = NULL) {
+                                                          sigtest = NULL,
+                                                          allow.empty.rows = FALSE) {
   no.ex <- is.null(exdat)
 
   txdat <- toFrame(txdat)
@@ -1145,6 +1169,7 @@ npreghat <-
     as.logical(return.hat),
     as.logical(no.ex),
     as.logical(leave.one.out),
+    as.logical(allow.empty.rows),
     PACKAGE = "np"
   ), continuous.names = bws[["xnames", exact = TRUE]][bws[["icon", exact = TRUE]]])
 }
@@ -1156,7 +1181,8 @@ npreghat <-
                                                            degree = integer(0),
                                                            bernstein.basis = FALSE,
                                                            s = NULL,
-                                                           leave.one.out = FALSE) {
+                                                           leave.one.out = FALSE,
+                                                           allow.empty.rows = FALSE) {
   .npreghat_exact_lp_apply_from_regression_core(
     bws = bws,
     txdat = txdat,
@@ -1167,7 +1193,8 @@ npreghat <-
     bernstein.basis = bernstein.basis,
     s = s,
     return.hat = TRUE,
-    leave.one.out = leave.one.out
+    leave.one.out = leave.one.out,
+    allow.empty.rows = allow.empty.rows
   )
 }
 
@@ -1699,6 +1726,13 @@ npreghat.rbandwidth <-
     dots <- list(...)
     npRejectLegacyLpArgs(names(dots), where = "npreghat")
 
+    allow.empty.rows <- !missing(exdat) &&
+      !isTRUE(dots[[".np.require.finite", exact = TRUE]])
+    finish.empty.rows <- function(value, rows) {
+      .npreghat_finish_empty_rows(value, rows,
+        defer = isTRUE(dots[[".np.defer.empty.rows", exact = TRUE]]))
+    }
+
     txdat <- toFrame(txdat)
     no.ex <- missing(exdat)
     leave.one.out <- npValidateScalarLogical(leave.one.out, "leave.one.out")
@@ -1956,14 +1990,18 @@ npreghat.rbandwidth <-
           basis = reg.spec$basis.engine,
           degree = reg.spec$degree.engine,
           bernstein.basis = reg.spec$bernstein.basis.engine,
-          s = s
+          s = s,
+          allow.empty.rows = allow.empty.rows && native.lp.mean.apply.route
         )
+        empty.rows <- attr(out, ".np.empty.rows", exact = TRUE)
+        if (!is.null(empty.rows))
+          attr(out, ".np.empty.rows") <- NULL
         if (ncol(out) == 1L)
-          return(as.vector(out))
+          return(finish.empty.rows(as.vector(out), empty.rows))
         response.names <- .npreghat_apply_colnames(y)
         if (!identical(colnames(out), response.names))
           colnames(out) <- response.names
-        return(out)
+        return(finish.empty.rows(out, empty.rows))
       } else if (identical(apply.strategy, "chunked")) {
         out <- .npreghat_exact_lp_apply_chunked_from_kernel_weights(
           bws = bws,
@@ -2015,7 +2053,8 @@ npreghat.rbandwidth <-
           basis = reg.spec$basis.engine,
           degree = reg.spec$degree.engine,
           bernstein.basis = reg.spec$bernstein.basis.engine,
-          leave.one.out = native.loo.route
+          leave.one.out = native.loo.route,
+          allow.empty.rows = allow.empty.rows && native.lp.mean.matrix.route
         )
       } else if (lc.derivative.exact.route) {
         .npreghat_exact_lc_derivative_matrix_from_npksum_chunked(
@@ -2049,21 +2088,25 @@ npreghat.rbandwidth <-
         )
       }
 
+      empty.rows <- attr(H, ".np.empty.rows", exact = TRUE)
+      if (!is.null(empty.rows))
+        attr(H, ".np.empty.rows") <- NULL
       if (identical(output, "apply")) {
         if (is.null(y))
           stop("argument 'y' is required when output='apply'")
         out <- H %*% y
         if (ncol(out) == 1L)
-          return(as.vector(out))
-        return(out)
+          out <- as.vector(out)
+        return(finish.empty.rows(out, empty.rows))
       }
 
       if (constraint.output)
-        return(.np_hat_constraint_from_matrix(H, y, "npreghat"))
+        return(finish.empty.rows(
+          .np_hat_constraint_from_matrix(H, y, "npreghat"), empty.rows))
 
       ridge.used <- if (native.lp.mean.matrix.route || native.loo.route) {
         .npreghat_native_ridge_used(
-          H, nrow(H), "npreghat(..., output = 'matrix')"
+          H, nrow(H), "npreghat(..., output = 'matrix')", empty.rows
         )
       } else {
         rep.int(0.0, nrow(H))
@@ -2091,7 +2134,7 @@ npreghat.rbandwidth <-
         attr(H, "Hy") <- Hy
       }
 
-      return(H)
+      return(finish.empty.rows(H, empty.rows))
     }
 
     if (any(s > degree))
