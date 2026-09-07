@@ -1473,7 +1473,7 @@ npindexbw.NULL <-
         reg.args = final.reg.args
       )
       tbw$fval <- as.numeric(best_record$objective)
-      tbw$num.feval <- if (!is.null(solution$bbe)) as.numeric(solution$bbe) else as.numeric(best_record$num.feval)
+      tbw$num.feval <- as.numeric(nomad.num.feval.total)
       tbw$num.feval.fast <- as.numeric(nomad.num.feval.fast.total)
       tbw$total.time <- NA_real_
       payload <- npindexbw.sibandwidth(
