@@ -291,6 +291,18 @@
   spec <- .npindex_resolve_spec(bws, where = "npindexhat")
   regtype <- spec$regtype.engine
 
+  if (identical(regtype, "lc") && identical(output, "apply") && !is.null(y)) {
+    y <- .np_indexhat_numeric_y(y)
+    if (nrow(y) != nrow(idx.train))
+      stop("number of rows in 'y' must equal number of training rows")
+    if (.np_indexhat_lc_moment_candidate(y, idx.train, idx.eval)) {
+      args <- .np_indexhat_lc_kernel_args(bws, idx.train, idx.eval, kernel.bws = kbw)
+      # The core/plot matrix owner divides fixed-bandwidth weights too.
+      args$bandwidth.divide <- TRUE
+      return(.np_indexhat_lc_moment_apply(y, args))
+    }
+  }
+
   kw <- .np_kernel_weights_direct(
     bws = kbw,
     txdat = idx.train,
@@ -380,7 +392,7 @@
     out
 }
 
-.np_indexhat_lc_kernel_weights <- function(bws, idx.train, idx.eval) {
+.np_indexhat_lc_kernel_args <- function(bws, idx.train, idx.eval, kernel.bws = NULL) {
   collapse_bound <- function(v, nm) {
     if (is.null(v))
       return(NULL)
@@ -395,12 +407,11 @@
          call. = FALSE)
   }
 
-  kw <- .np_index_kernel_sum(
+  list(
     txdat = idx.train,
     exdat = idx.eval,
-    bws = if (identical(bws$type, "adaptive_nn"))
+    bws = if (!is.null(kernel.bws)) kernel.bws else if (identical(bws$type, "adaptive_nn"))
       .np_indexhat_kbw(bws, idx.train) else bws$bw,
-    .np.internal.bandwidth.divide.weights = identical(bws$type, "adaptive_nn"),
     bwtype = bws$type,
     ckertype = bws$ckertype,
     ckerorder = bws$ckerorder,
@@ -408,17 +419,35 @@
     ckerlb = if (identical(bws$ckerbound, "fixed"))
       collapse_bound(bws$ckerlb, "ckerlb") else NULL,
     ckerub = if (identical(bws$ckerbound, "fixed"))
-      collapse_bound(bws$ckerub, "ckerub") else NULL,
-    return.kernel.weights = TRUE
-  )$kw
+      collapse_bound(bws$ckerub, "ckerub") else NULL
+  )
+}
+
+.np_indexhat_lc_kernel_weights <- function(bws, idx.train, idx.eval) {
+  args <- .np_indexhat_lc_kernel_args(bws, idx.train, idx.eval)
+  args$.np.internal.bandwidth.divide.weights <- identical(bws$type, "adaptive_nn")
+  args$return.kernel.weights <- TRUE
+  kw <- do.call(.np_index_kernel_sum, args)$kw
 
   if (!is.matrix(kw))
     kw <- matrix(kw, nrow = nrow(idx.train))
-
   if (nrow(kw) != nrow(idx.train) || ncol(kw) != nrow(idx.eval))
     stop("single-index lc kernel-weight matrix shape mismatch", call. = FALSE)
-
   kw
+}
+
+.np_indexhat_lc_moment_candidate <- function(y, idx.train, idx.eval) {
+  # Keep matrix/BLAS semantics for non-finite inputs: npksum omits NA rows.
+  is.numeric(y) && all(is.finite(y)) &&
+    all(is.finite(as.matrix(idx.train))) && all(is.finite(as.matrix(idx.eval)))
+}
+
+.np_indexhat_lc_moment_apply <- function(y, args) {
+  moments <- do.call(.np_index_kernel_moments, c(list(y = y), args))
+  out <- t(sweep(moments$numerator, 2L,
+                 pmax(moments$denominator, .Machine$double.eps), "/"))
+  colnames(out) <- colnames(y)
+  if (ncol(out) == 1L) as.vector(out) else out
 }
 
 .np_indexhat_lc_mean <- function(bws,
@@ -427,26 +456,21 @@
                                  y = NULL,
                                  output = c("matrix", "apply")) {
   output <- match.arg(output)
-  kw <- .np_indexhat_lc_kernel_weights(
-    bws = bws,
-    idx.train = idx.train,
-    idx.eval = idx.eval
-  )
-  H <- .np_lc_hat_normalize(
-    kw,
-    pmax(colSums(kw), .Machine$double.eps)
-  )
+  if (identical(output, "apply")) {
+    if (is.null(y))
+      stop("argument 'y' is required when output='apply'")
+    y <- .np_indexhat_numeric_y(y)
+    if (nrow(y) != nrow(idx.train))
+      stop("number of rows in 'y' must equal number of training rows")
+    if (.np_indexhat_lc_moment_candidate(y, idx.train, idx.eval))
+      return(.np_indexhat_lc_moment_apply(
+        y, .np_indexhat_lc_kernel_args(bws, idx.train, idx.eval)))
+  }
 
+  kw <- .np_indexhat_lc_kernel_weights(bws, idx.train, idx.eval)
+  H <- .np_lc_hat_normalize(kw, pmax(colSums(kw), .Machine$double.eps))
   if (identical(output, "matrix"))
     return(H)
-
-  if (is.null(y))
-    stop("argument 'y' is required when output='apply'")
-
-  y <- .np_indexhat_numeric_y(y)
-  if (nrow(y) != nrow(idx.train))
-    stop("number of rows in 'y' must equal number of training rows")
-
   out <- H %*% y
   if (ncol(out) == 1L) as.vector(out) else out
 }
