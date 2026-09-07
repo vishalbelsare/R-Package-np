@@ -851,21 +851,14 @@ npindex.sibandwidth <-
 
       W <- txdat[,-1,drop=FALSE]
 
-      tyindex <- .np_index_kernel_sum(txdat = index.df,
-                        tydat = rep(1,length(tydat)),
-                        weights = W,
+      moments <- .np_index_kernel_moments(y = W, txdat = index.df,
                         bws = bws$bw,
                         bwtype = bws$type,
                         ckertype = bws$ckertype,
                         ckerorder = bws$ckerorder,
-                        ckerbound = bws$ckerbound)$ksum
-
-      tindex <- .np_index_kernel_sum(txdat = index.df,
-                       bws = bws$bw,
-                       bwtype = bws$type,
-                       ckertype = bws$ckertype,
-                       ckerorder = bws$ckerorder,
-                       ckerbound = bws$ckerbound)$ksum
+                        ckerbound = bws$ckerbound)
+      tyindex <- moments$numerator
+      tindex <- moments$denominator
 
       ## Need to trap case where k-1=1... ksum will return a 1 D
       ## array, need a 1 x n matrix
