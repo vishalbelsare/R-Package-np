@@ -15,6 +15,11 @@
   indices, and NOMAD-only index searches report cumulative evaluations plus
   the existing final certification count.
 
+* Regression fits and plots replay a saved formula data expression in the
+  bandwidth call's existing environment, so wrapper-local data remains usable
+  after the wrapper returns and after saving and reloading the bandwidth object.
+
+
 * Public plot arguments now use dotted names: data.overlay, data.rug,
   factor.boxplot, boxplot.outliers, coef.index, common.scale, proper.method,
   proper.control, boot.control, grid.control and render.control. Plot helpers
