@@ -1,5 +1,20 @@
 # np 0.80-1
 
+* Generalized-NN single-index training summaries and coefficient covariance
+  use a consistent training-evaluation convention when external predictions
+  or different inference outputs are requested. Previously affected serial
+  external-data results are corrected; the ordinary no-external-data
+  convention and MPI counterpart are preserved.
+
+* Shared call evaluation now distinguishes returned condition objects from
+  raised errors. MPI worker command loops also accept returned try-error
+  values; actual raised-command failure policy is unchanged.
+
+* Coefficient plot controls again validate their values after the dotted-name
+  migration. Single-index objects retain their observation count for vector
+  indices, and NOMAD-only index searches report cumulative evaluations plus
+  the existing final certification count.
+
 * Public plot arguments now use dotted names: data.overlay, data.rug,
   factor.boxplot, boxplot.outliers, coef.index, common.scale, proper.method,
   proper.control, boot.control, grid.control and render.control. Plot helpers
@@ -35,6 +50,10 @@
   errors. Coefficient covariance remains asymptotic in either mode. Reusing
   `npindex(bws = model$bws, ...)` adds requested outputs without repeating search.
   Singular coefficient-information matrices produce an informative error.
+  Local-constant uniform kernels have zero first derivative and cannot provide
+  this covariance for free coefficients; use se = FALSE for point estimates.
+  Default inference adds training derivative and moment work and can cost
+  appreciably more than a point-estimate-only fit when bandwidths are held.
 
 * Adaptive-NN single-index kernel sums now use donor-bandwidth normalization
   consistently for fitted values, bootstrap fits and covariance conditional
