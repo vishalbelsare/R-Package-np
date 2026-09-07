@@ -39,7 +39,7 @@ make_npindex_invalid_legacy_fixture <- function(method) {
   list(xdat = x, ydat = y, bws = bws)
 }
 
-test_that("npindexbw legacy owners reject an invalid selected candidate", {
+test_that("npindexbw legacy owners reject a raw-invalid held start", {
   for (method in c("ichimura", "kleinspady")) {
     fixture <- make_npindex_invalid_legacy_fixture(method)
     expect_error(
@@ -52,7 +52,7 @@ test_that("npindexbw legacy owners reject an invalid selected candidate", {
         optim.maxit = 5L,
         scale.factor.search.lower = 0
       ),
-      "npindexbw search did not return a raw-valid selected candidate",
+      "raw-invalid held bandwidth; restoration is disabled",
       fixed = TRUE,
       info = method
     )
@@ -88,13 +88,41 @@ make_npindex_invalid_nomad_fixture <- function(engine) {
   )
 }
 
-test_that("npindexbw NOMAD boundaries reject an invalid selected candidate", {
+test_that("npindexbw NOMAD boundaries reject invalid starts or endpoints", {
   for (engine in c("nomad", "nomad+powell")) {
     expect_error(
       do.call(npindexbw, make_npindex_invalid_nomad_fixture(engine)),
-      "npindexbw search did not return a raw-valid selected candidate",
+      if (engine == "nomad+powell")
+        "raw-invalid held bandwidth; restoration is disabled" else
+        "npindexbw search did not return a raw-valid selected candidate",
       fixed = TRUE,
       info = engine
     )
   }
+})
+
+test_that("npindexbw final certificate preserves the point and rejects raw invalidity", {
+  certify <- getFromNamespace(".npindexbw_certify_selected_candidate", "np")
+  result <- getFromNamespace(".npindexbw_objective_result", "np")
+  point <- c(0.5, 0.75)
+  seen <- NULL
+  raw <- 0.25
+  testthat::local_mocked_bindings(
+    .npindexbw_eval_objective = function(param, xmat, ydat, bws, spec,
+                                        leaf.descriptor, certify) {
+      seen <<- list(point = param, certify = certify)
+      result(raw, 1L, certify)
+    },
+    .package = "np"
+  )
+  args <- list(param = point, xmat = matrix(1, 2L, 2L), ydat = c(0, 1),
+               bws = list(), spec = list())
+  expect_identical(do.call(certify, args), result(raw, 1L, TRUE))
+  expect_identical(seen, list(point = point, certify = TRUE))
+  raw <- .Machine$double.xmax
+  seen <- NULL
+  expect_error(do.call(certify, args),
+               "npindexbw search did not return a raw-valid selected candidate",
+               fixed = TRUE)
+  expect_identical(seen, list(point = point, certify = TRUE))
 })
