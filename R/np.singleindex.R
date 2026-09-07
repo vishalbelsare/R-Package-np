@@ -624,6 +624,10 @@ npindex.sibandwidth <-
       NULL
     }
     next_npreg_fit_args <- function(exdat = NULL, gradients = FALSE, se = FALSE) {
+      # GNN training statistics must use the same evaluation-row convention
+      # whether or not the public call also requests external predictions.
+      if (is.null(exdat) && identical(bws$type, "generalized_nn"))
+        exdat <- index.df
       args <- if (identical(regtype, "lp") || lc.fixed.progress.route) {
         c(
           list(
