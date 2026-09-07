@@ -442,7 +442,7 @@ test_that("plot contract: rgl plot-data returns the usual data payload", {
     output = "data",
     renderer = "rgl",
     view = "fixed",
-    data_overlay = FALSE
+    data.overlay = FALSE
   ))
 
   rplotdata <- suppressWarnings(plot(
@@ -450,7 +450,7 @@ test_that("plot contract: rgl plot-data returns the usual data payload", {
     output = "plot-data",
     renderer = "rgl",
     view = "fixed",
-    data_overlay = FALSE
+    data.overlay = FALSE
   ))
 
   expect_type(rplotdata, "list")
@@ -563,7 +563,7 @@ test_that("plot contract: npscoef supports coef=TRUE plot path", {
     plot(
       fit,
       coef = TRUE,
-      coef_index = 1,
+      coef.index = 1,
       perspective = FALSE,
       neval = 20,
       output = "plot-data",
@@ -703,7 +703,7 @@ test_that("plot contract: npscoef fitted perspective path preserves semantic z e
     view = "fixed",
     renderer = "base",
     output = "data",
-    data_overlay = FALSE,
+    data.overlay = FALSE,
     errors = "none"
   ))
 

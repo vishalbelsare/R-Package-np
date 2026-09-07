@@ -43,12 +43,12 @@ run_exact_frozen_plot_pair <- function(fit, ..., seed = 9001L) {
 
   set.seed(seed)
   suppressWarnings(capture.output(
-    exact <- do.call(plot, c(list(fit), extra, list(boot_control = np_boot_control(nonfixed = "exact"))))
+    exact <- do.call(plot, c(list(fit), extra, list(boot.control = np_boot_control(nonfixed = "exact"))))
   ))
 
   set.seed(seed)
   suppressWarnings(capture.output(
-    frozen <- do.call(plot, c(list(fit), extra, list(boot_control = np_boot_control(nonfixed = "frozen"))))
+    frozen <- do.call(plot, c(list(fit), extra, list(boot.control = np_boot_control(nonfixed = "frozen"))))
   ))
 
   list(exact = exact, frozen = frozen)

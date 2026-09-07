@@ -23,7 +23,7 @@ test_that("partially linear bootstrap bias centers are component-specific", {
       bootstrap = boot,
       band = "pointwise",
       B = 19L,
-      data_overlay = FALSE,
+      data.overlay = FALSE,
       output = "data"
     ))
 
@@ -68,7 +68,7 @@ test_that("partially linear bias-corrected plot renders continuous and factor pa
       bootstrap = "wild",
       band = "simultaneous",
       B = 29L,
-      data_overlay = FALSE
+      data.overlay = FALSE
     )),
     NA
   )

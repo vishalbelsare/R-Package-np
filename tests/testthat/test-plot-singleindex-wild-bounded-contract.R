@@ -67,7 +67,7 @@ test_that("single-index fixed wild bootstrap block path matches dense path", {
     neval = 23L,
     output = "data",
     perspective = FALSE,
-    data_overlay = FALSE
+    data.overlay = FALSE
   ))[[1L]]
 
   options(np.plot.wild.apply.operator.threshold.bytes = 0)
@@ -80,7 +80,7 @@ test_that("single-index fixed wild bootstrap block path matches dense path", {
     neval = 23L,
     output = "data",
     perspective = FALSE,
-    data_overlay = FALSE
+    data.overlay = FALSE
   ))[[1L]]
 
   expect_equal(block$mean, dense$mean, tolerance = 1e-12)

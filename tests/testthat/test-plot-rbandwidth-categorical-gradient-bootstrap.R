@@ -268,7 +268,7 @@ test_that("categorical regression gradient asymptotic intervals use native HC0 e
     perspective = FALSE,
     gradients = TRUE,
     errors = "asymptotic",
-    data_overlay = FALSE
+    data.overlay = FALSE
   )))
   expect_type(out, "list")
   expect_true(all(vapply(out, inherits, logical(1), "npregression")))
@@ -310,7 +310,7 @@ test_that("continuous regression gradient asymptotic intervals remain available"
     perspective = FALSE,
     gradients = TRUE,
     errors = "asymptotic",
-    data_overlay = FALSE
+    data.overlay = FALSE
   )))
   expect_type(out, "list")
   expect_true(all(vapply(out, inherits, logical(1), "npregression")))

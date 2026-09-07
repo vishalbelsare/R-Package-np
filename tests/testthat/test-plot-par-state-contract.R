@@ -117,8 +117,8 @@ test_that("np.pairs restores layout parameters without resetting plot coordinate
   set.seed(20260310 + 1L)
   dat <- data.frame(a = rnorm(40), b = runif(40), c = rnorm(40))
 
-  pair_list <- np.pairs(y_vars = c("a", "b", "c"), y_dat = dat)
-  state <- with_plot_state(np.pairs.plot(pair_list))
+  pair.list <- np.pairs(y.vars = c("a", "b", "c"), y.dat = dat)
+  state <- with_plot_state(np.pairs.plot(pair.list))
 
   expect_plot_device_clean(state, expect_mar_restore = TRUE, info = "np.pairs")
 })
