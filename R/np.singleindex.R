@@ -464,6 +464,10 @@ npindex.sibandwidth <-
     no.ex = missing(exdat)
     no.ey = missing(eydat)
 
+    fit.activity <- .np_progress_activity_begin(
+      label = "Fitting single-index model", detail = "fitted values")
+    on.exit(.np_progress_activity_end(fit.activity), add = TRUE)
+
     ## if no.ex then if !no.ey then ey and tx must match, to get
     ## oos errors alternatively if no.ey you get is errors if
     ## !no.ex then if !no.ey then ey and ex must match, to get
@@ -819,6 +823,7 @@ npindex.sibandwidth <-
     ## independently of whether public gradients are requested.
 
     if (se && ncol(txdat) > 1L) {
+      .np_progress_activity_step(fit.activity, detail = "coefficient covariance")
       if (!asymptotic.se && !gradients) {
         training <- do.call(npreg, next_npreg_fit_args(gradients = TRUE))
         covariance.mean <- training$mean
@@ -982,13 +987,15 @@ npindex.sibandwidth <-
       }
     }
 
+    .np_progress_activity_end(fit.activity, completed = TRUE)
+
     if (bootstrap.se){
 
       progress <- .np_bootstrap_progress_begin(B, "Bootstrapping single-index fit")
-      on.exit(.np_bootstrap_progress_end(progress), add = TRUE)
+      on.exit(.np_progress_activity_end(progress), add = TRUE)
       boot.out = suppressWarnings(boot(data.frame(txdat,tydat),
         .np_bootstrap_progress_statistic(progress, boofun), R = B))
-      .np_bootstrap_progress_step(progress, B, "computing bootstrap standard errors")
+      .np_progress_activity_step(progress, B, "computing bootstrap standard errors")
 
       index.merr = matrix(data = 0, ncol = 1, nrow = length(index.eval))
       index.merr[,] = .np_plot_bootstrap_col_sds(boot.out$t[, seq_len(length(index.eval)), drop = FALSE])
@@ -1005,7 +1012,7 @@ npindex.sibandwidth <-
         index.mgerr = sd(boot.out$t[,2*length(index.eval)+1])
         index.mgerr = abs(bws$beta)*index.mgerr
       }
-      .np_bootstrap_progress_end(progress, completed = TRUE)
+      .np_progress_activity_end(progress, completed = TRUE)
     }
     ## goodness of fit
 
