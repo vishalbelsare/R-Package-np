@@ -1,5 +1,9 @@
 # np 0.80-1
 
+* Single-index fixed-bandwidth NOMAD searches reject out-of-domain exploratory
+  bandwidths without terminating the search. Explicit input and final-result
+  validation remain strict, and unexpected callback errors still propagate.
+
 * Generalized-NN single-index training summaries and coefficient covariance
   use a consistent training-evaluation convention when external predictions
   or different inference outputs are requested. Previously affected serial
