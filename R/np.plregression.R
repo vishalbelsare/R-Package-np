@@ -544,6 +544,7 @@ npplreg.plbandwidth <-
     if (!no.ey)
       tmp.ey <- .np_plreg_numeric_response(eydat, bws$bw$yzbw$ydati)
     
+    empty.eval.rows <- NULL
     reg_mean <- function(regbw, ytrain, zeval = NULL) {
       out <- .np_regression_cat_profile_mean(
         bws = regbw,
@@ -557,7 +558,11 @@ npplreg.plbandwidth <-
       args <- list(txdat = tzdat, tydat = ytrain, bws = regbw)
       if (!is.null(zeval))
         args$exdat <- zeval
-      as.vector(fitted(do.call(npreg, args)))
+      args$.np.defer.empty.rows <- TRUE
+      fit <- do.call(npreg, args)
+      empty.eval.rows <<- .npreg_merge_empty_rows(
+        empty.eval.rows, attr(fit, ".np.empty.rows", exact = TRUE))
+      as.vector(fitted(fit))
     }
 
     ## y on z
@@ -697,7 +702,10 @@ npplreg.plbandwidth <-
     environment(ev$call) <- parent.frame()
     fit.progress <- .np_progress_end(fit.progress)
     fit.progress.active <- FALSE
-    return(ev)
+    return(.npreg_finish_empty_rows(ev, empty.eval.rows,
+      omitted = if(no.exz) integer(0) else which(!keep.eval),
+      defer = isTRUE(list(...)[[".np.defer.empty.rows", exact = TRUE]]),
+      owner = "npplreg", row.labels = if(no.exz) NULL else row.names(exdat)))
   }
 
 

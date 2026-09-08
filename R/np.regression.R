@@ -1,3 +1,44 @@
+# Required inference/refit consumers must not publish partial external fits.
+.npreg_complete <- function(...) {
+  args <- list(...)
+  args[[".np.require.complete"]] <- TRUE
+  do.call(npreg, args)
+}
+
+.npreg_merge_empty_rows <- function(current, incoming) {
+  if(is.null(incoming)) return(current)
+  if(is.null(current)) return(incoming)
+  if(length(current) != length(incoming))
+    stop("internal external-row metadata length mismatch", call. = FALSE)
+  as.integer(current == 1L | incoming == 1L)
+}
+
+.npreg_finish_empty_rows <- function(value, flags = NULL,
+                                     omitted = integer(0), defer = FALSE,
+                                     owner = "npreg", row.labels = NULL) {
+  if(is.null(flags)) flags <- attr(value, ".np.empty.rows", exact = TRUE)
+  if(is.null(flags)) return(value)
+  attr(value, ".np.empty.rows") <- NULL
+  labels <- if(length(row.labels) == length(flags)) row.labels[flags == 1L] else NULL
+  if(length(omitted)) {
+    complete <- setdiff(seq_len(length(flags) + length(omitted)), omitted)
+    expanded <- integer(length(flags) + length(omitted))
+    expanded[complete] <- flags
+    flags <- expanded
+  }
+  if(defer) {
+    attr(value, ".np.empty.rows") <- flags
+    return(value)
+  }
+  rows <- which(flags == 1L)
+  if(is.null(labels)) labels <- rows
+  .np_warning(sprintf(
+    "%s: all computed kernel weights are zero for a fit or contrast at %d external evaluation row(s) (%s%s); returning NA for undefined output components",
+    owner, length(rows), paste(utils::head(labels, 8L), collapse = ", "),
+    if(length(rows) > 8L) ", ..." else ""), call. = FALSE)
+  value
+}
+
 npreg <-
   function(bws, ...){
     mc <- match.call(expand.dots = FALSE)
@@ -698,14 +739,17 @@ npreg.rbandwidth <-
             as.integer(npLpBasisCode(reg.spec$basis.engine)),
             as.integer(enrow),
             as.integer(ncol),
-            .np_regression_output_request(
+            c(.np_regression_output_request(
               se = se,
               gradients = do.compiled.gradients
-            ),
+            ), as.integer(!no.ex && !isTRUE(dots[[".np.require.complete", exact = TRUE]]) &&
+                           reg.spec$regtype.engine %in% c("ll", "lp"))),
             as.double(cker.bounds.c$lb),
             as.double(cker.bounds.c$ub),
             PACKAGE = "np")
     ), continuous.names = bws[["xnames", exact = TRUE]][bws[["icon", exact = TRUE]]])
+
+    empty.rows <- attr(myout, ".np.empty.rows", exact = TRUE)
 
     if (gradients){
       myout$g = matrix(data=myout$g, nrow = enrow, ncol = ncol, byrow = FALSE) 
@@ -769,7 +813,9 @@ npreg.rbandwidth <-
 
     ev$call <- match.call(expand.dots = FALSE)
     environment(ev$call) <- parent.frame()
-    return(ev)
+    return(.npreg_finish_empty_rows(ev, empty.rows, eval.rows.omit,
+      defer = isTRUE(dots[[".np.defer.empty.rows", exact = TRUE]]),
+      row.labels = row.names(teval)))
   }
 
 npreg.default <- function(bws, txdat, tydat, nomad = FALSE,

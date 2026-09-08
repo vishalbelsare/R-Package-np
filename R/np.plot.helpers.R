@@ -8794,7 +8794,8 @@ plotFactor <- function(f, y, ...){
       tydat = ydat,
       tzdat = zdat,
       exdat = exdat,
-      ezdat = ezdat
+      ezdat = ezdat,
+      .np.defer.empty.rows = TRUE
     )
 
     yfit <- npreg(
@@ -8802,9 +8803,13 @@ plotFactor <- function(f, y, ...){
       tydat = ydat,
       exdat = ezdat,
       bws = bws$bw$yzbw,
-      se = TRUE
+      se = TRUE,
+      .np.defer.empty.rows = TRUE
     )
 
+    empty.rows <- .npreg_merge_empty_rows(
+      attr(fit, ".np.empty.rows", exact = TRUE),
+      attr(yfit, ".np.empty.rows", exact = TRUE))
     neval <- nrow(exdat)
     resx.eval <- matrix(0.0, nrow = neval, ncol = ncol(xdat))
     x.err.sq <- numeric(neval)
@@ -8815,8 +8820,11 @@ plotFactor <- function(f, y, ...){
         tydat = xdat[, j],
         exdat = ezdat,
         bws = bws$bw[[j + 1L]],
-        se = TRUE
+        se = TRUE,
+        .np.defer.empty.rows = TRUE
       )
+      empty.rows <- .npreg_merge_empty_rows(
+        empty.rows, attr(xfit, ".np.empty.rows", exact = TRUE))
 
       if (is.factor(xdat[1L, j])) {
         tmp.eval <- adjustLevels(exdat[, j, drop = FALSE], bws$bw[[j + 1L]]$ydati, allowNewCells = TRUE)
@@ -8831,7 +8839,8 @@ plotFactor <- function(f, y, ...){
 
     beta.vcov.term <- rowSums((resx.eval %*% fit$xcoefvcov) * resx.eval)
     fit$merr <- sqrt(pmax(as.double(yfit$merr)^2 + x.err.sq + beta.vcov.term, 0.0))
-    fit
+    .npreg_finish_empty_rows(fit, empty.rows,
+      omitted = which(!keep.eval), owner = "plot.npplreg", row.labels = row.names(exdat))
   }
 
 .np_plot_unconditional_eval <- function(xdat,

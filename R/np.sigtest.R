@@ -485,7 +485,7 @@ npsigtest.rbandwidth <- function(bws,
 
     progress <- .np_progress_step(progress)
     nn.stage <- "unrestricted gradient evaluation"
-    npreg.out <- npreg(txdat = xdat,
+    npreg.out <- .npreg_complete(txdat = xdat,
                        tydat = ydat,
                        bws = bws,
                        gradients = TRUE,
@@ -501,7 +501,7 @@ npsigtest.rbandwidth <- function(bws,
 
       progress <- .np_progress_step(progress)
       nn.stage <- "unrestricted residual fit"
-      ei.unres <- scale(residuals(npreg(bws=bws)))
+      ei.unres <- scale(residuals(.npreg_complete(bws=bws)))
       ei.unres.scale <- attr(ei.unres,"scaled:scale")
       ei.unres.center <- attr(ei.unres,"scaled:center")      
       progress <- .np_progress_step(progress)
@@ -527,7 +527,7 @@ npsigtest.rbandwidth <- function(bws,
       
       progress <- .np_progress_step(progress)
       nn.stage <- "null-model evaluation"
-      mhat.xi <-  npreg(txdat = xdat,
+      mhat.xi <-  .npreg_complete(txdat = xdat,
                         tydat = ydat,
                         exdat = xdat.eval,
                         bws = bws,
@@ -684,7 +684,7 @@ npsigtest.rbandwidth <- function(bws,
 
       } else if(boot.method == "pairwise") {
 
-        npreg.boot <- npreg(txdat = xdat.star,
+        npreg.boot <- .npreg_complete(txdat = xdat.star,
                             tydat = ydat.star,
                             bws = bws,
                             gradients = TRUE,
@@ -693,7 +693,7 @@ npsigtest.rbandwidth <- function(bws,
 
       } else {
 
-        npreg.boot <- npreg(txdat = xdat,
+        npreg.boot <- .npreg_complete(txdat = xdat,
                             tydat = ydat.star,
                             bws = bws,
                             gradients = TRUE,
@@ -736,7 +736,7 @@ npsigtest.rbandwidth <- function(bws,
     if (streamed.iid) {
       progress <- .np_progress_step(progress)
       nn.stage <- "unrestricted gradient evaluation"
-      streamed.unrestricted <- npreg(
+      streamed.unrestricted <- .npreg_complete(
         txdat = xdat,
         tydat = ydat,
         bws = bws,
@@ -747,7 +747,7 @@ npsigtest.rbandwidth <- function(bws,
       progress <- .np_progress_step(progress)
       progress <- .np_progress_step(progress)
       nn.stage <- "unrestricted residual fit"
-      streamed.ei.unres <- scale(residuals(npreg(bws = bws)))
+      streamed.ei.unres <- scale(residuals(.npreg_complete(bws = bws)))
       streamed.ei.unres.scale <- attr(streamed.ei.unres, "scaled:scale")
       streamed.ei.unres.center <- attr(streamed.ei.unres, "scaled:center")
       streamed.ei.unres <- NULL
@@ -782,7 +782,7 @@ npsigtest.rbandwidth <- function(bws,
       } else {
         progress <- .np_progress_step(progress)
         nn.stage <- "unrestricted gradient evaluation"
-        npreg.out <- npreg(txdat = xdat,
+        npreg.out <- .npreg_complete(txdat = xdat,
                            tydat = ydat,
                            bws = bws,
                            gradients = TRUE,
@@ -803,7 +803,7 @@ npsigtest.rbandwidth <- function(bws,
         } else {
           progress <- .np_progress_step(progress)
           nn.stage <- "unrestricted residual fit"
-          ei.unres <- scale(residuals(npreg(bws=bws)))
+          ei.unres <- scale(residuals(.npreg_complete(bws=bws)))
           ei.unres.scale <- attr(ei.unres,"scaled:scale")
           ei.unres.center <- attr(ei.unres,"scaled:center")
           progress <- .np_progress_step(progress)
@@ -828,7 +828,7 @@ npsigtest.rbandwidth <- function(bws,
         
         progress <- .np_progress_step(progress)
         nn.stage <- "null-model evaluation"
-        mhat.xi <-  npreg(txdat = xdat,
+        mhat.xi <-  .npreg_complete(txdat = xdat,
                           tydat = ydat,
                           exdat = xdat.eval,
                           bws = bws,
@@ -985,7 +985,7 @@ npsigtest.rbandwidth <- function(bws,
 
         } else if(boot.method == "pairwise") {
           
-          npreg.boot <- npreg(txdat = xdat.star,
+          npreg.boot <- .npreg_complete(txdat = xdat.star,
                               tydat = ydat.star,
                               bws = bws,
                               gradients = TRUE,
@@ -994,7 +994,7 @@ npsigtest.rbandwidth <- function(bws,
           
         } else {
           
-          npreg.boot <- npreg(txdat = xdat,
+          npreg.boot <- .npreg_complete(txdat = xdat,
                               tydat = ydat.star,
                               bws = bws,
                               gradients = TRUE,

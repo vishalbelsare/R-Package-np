@@ -623,7 +623,15 @@ npindex.sibandwidth <-
     } else {
       NULL
     }
+    empty.eval.rows <- NULL
+    run_npreg_fit <- function(args) {
+      fit <- do.call(npreg, args)
+      empty.eval.rows <<- .npreg_merge_empty_rows(
+        empty.eval.rows, attr(fit, ".np.empty.rows", exact = TRUE))
+      fit
+    }
     next_npreg_fit_args <- function(exdat = NULL, gradients = FALSE, se = FALSE) {
+      require.complete <- no.ex || is.null(exdat)
       # GNN training statistics must use the same evaluation-row convention
       # whether or not the public call also requests external predictions.
       if (is.null(exdat) && identical(bws$type, "generalized_nn"))
@@ -651,6 +659,8 @@ npindex.sibandwidth <-
         fit.progress.handoff <<- FALSE
       }
       args$se <- se
+      args$.np.require.complete <- require.complete
+      args$.np.defer.empty.rows <- TRUE
       args
     }
 
@@ -703,7 +713,7 @@ npindex.sibandwidth <-
     ## Next, if no gradients are requested, use (faster) npksum
 
     if (asymptotic.se) {
-      model <- do.call(npreg, next_npreg_fit_args(
+      model <- run_npreg_fit(next_npreg_fit_args(
         exdat = index.eval.df,
         gradients = gradients || (no.ex && ncol(txdat) > 1L), se = TRUE
       ))
@@ -717,7 +727,7 @@ npindex.sibandwidth <-
       if (no.ex) {
         index.tgrad <- model$grad
       } else if (ncol(txdat) > 1L || no.ey || residuals) {
-        training <- do.call(npreg, next_npreg_fit_args(
+        training <- run_npreg_fit(next_npreg_fit_args(
           gradients = ncol(txdat) > 1L
         ))
         index.tmean <- training$mean
@@ -765,14 +775,14 @@ npindex.sibandwidth <-
 
         }
       } else {
-        model <- do.call(npreg, next_npreg_fit_args(
+        model <- run_npreg_fit(next_npreg_fit_args(
           exdat = index.eval.df,
           gradients = FALSE
         ))
         index.mean <- model$mean
 
         if (!no.ex && (no.ey || residuals)) {
-          model <- do.call(npreg, next_npreg_fit_args(
+          model <- run_npreg_fit(next_npreg_fit_args(
             gradients = FALSE
           ))
           index.tmean <- model$mean
@@ -780,7 +790,7 @@ npindex.sibandwidth <-
       }
 
     } else if(gradients==TRUE) {
-      model <- do.call(npreg, next_npreg_fit_args(
+      model <- run_npreg_fit(next_npreg_fit_args(
         exdat = index.eval.df,
         gradients = TRUE
       ))
@@ -800,7 +810,7 @@ npindex.sibandwidth <-
         ## are specified. Also, needed for variance-covariance matrix
         ## (uses on ly the training data)
 
-        model <- do.call(npreg, next_npreg_fit_args(
+        model <- run_npreg_fit(next_npreg_fit_args(
           gradients = TRUE
         ))
 
@@ -829,7 +839,7 @@ npindex.sibandwidth <-
     if (se && ncol(txdat) > 1L) {
       .np_progress_activity_step(fit.activity, detail = "coefficient covariance")
       if (!asymptotic.se && !gradients) {
-        training <- do.call(npreg, next_npreg_fit_args(gradients = TRUE))
+        training <- run_npreg_fit(next_npreg_fit_args(gradients = TRUE))
         covariance.mean <- training$mean
         covariance.grad <- as.matrix(training$grad)
       } else {
@@ -937,7 +947,7 @@ npindex.sibandwidth <-
           boot.args$degree <- spec$degree.engine
           boot.args$bernstein.basis <- spec$bernstein.basis.engine
         }
-        model <- do.call(npreg, boot.args)[c('mean','grad')]
+        model <- do.call(.npreg_complete, boot.args)[c('mean','grad')]
         
         c(model$mean, model$grad, mean(model$grad))
       }
@@ -978,7 +988,7 @@ npindex.sibandwidth <-
             boot.args$degree <- spec$degree.engine
             boot.args$bernstein.basis <- spec$bernstein.basis.engine
           }
-          do.call(npreg, boot.args)$mean
+          do.call(.npreg_complete, boot.args)$mean
         }
         
       }
@@ -1098,5 +1108,7 @@ npindex.sibandwidth <-
     ev$fit.time <- fit.elapsed
     ev$nomad.time <- if (!is.null(bws$nomad.time) && is.finite(bws$nomad.time)) as.double(bws$nomad.time) else NA_real_
     ev$powell.time <- if (!is.null(bws$powell.time) && is.finite(bws$powell.time)) as.double(bws$powell.time) else NA_real_
-    ev
+    .npreg_finish_empty_rows(ev, empty.eval.rows,
+      omitted = if(no.ex) integer(0) else which(!keep.eval),
+      owner = "npindex", row.labels = if(no.ex) NULL else row.names(exdat))
   }

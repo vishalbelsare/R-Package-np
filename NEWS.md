@@ -1,5 +1,10 @@
 # np 0.80-1
 
+* External local-linear and local-polynomial fits now report exactly empty
+  computed kernel rows as NA in the undefined output components, with one
+  warning after the caller finishes. Supported components and required
+  training, covariance and bootstrap computations keep their existing policy.
+
 * Single-index NOMAD refinements retain the original physical bandwidth
   lower bound. A valid incumbent is no longer rejected because its changed
   index coefficients imply a different scale at the refinement handoff.
