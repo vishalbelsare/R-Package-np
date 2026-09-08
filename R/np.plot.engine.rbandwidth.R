@@ -52,7 +52,7 @@
            plot.data.overlay = TRUE,
            plot.rug = FALSE,
            ...,
-           random.seed){
+           random.seed, .np.empty.report = NULL){
 
     sub.supplied <- !missing(sub)
 
@@ -297,7 +297,8 @@
         ydat = ydat,
         exdat = x.eval,
         gradient.order = gradient.order,
-        need.asymptotic = identical(plot.errors.method, "asymptotic")
+        need.asymptotic = identical(plot.errors.method, "asymptotic"),
+        .np.empty.report = .np.empty.report
       )
 
       terr = matrix(data = tobj$merr, nrow = dim(x.eval)[1], ncol = 3)
@@ -652,7 +653,8 @@
           exdat = subcol(exdat,ei,i)[seq_len(xi.neval),, drop = FALSE],
           gradients = gradients,
           gradient.order = gradient.order,
-          need.asymptotic = identical(plot.errors.method, "asymptotic")
+          need.asymptotic = identical(plot.errors.method, "asymptotic"),
+          .np.empty.report = .np.empty.report
         )
 
         temp.mean[seq_len(xi.neval)] = if (gradients) tr$grad[, i] else tr$mean

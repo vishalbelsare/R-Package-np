@@ -10,7 +10,9 @@
   if(is.null(current)) return(incoming)
   if(length(current) != length(incoming))
     stop("internal external-row metadata length mismatch", call. = FALSE)
-  as.integer(current == 1L | incoming == 1L)
+  out <- as.integer(current == 1L | incoming == 1L)
+  names(out) <- if(!is.null(names(current))) names(current) else names(incoming)
+  out
 }
 
 .npreg_finish_empty_rows <- function(value, flags = NULL,
@@ -19,11 +21,16 @@
   if(is.null(flags)) flags <- attr(value, ".np.empty.rows", exact = TRUE)
   if(is.null(flags)) return(value)
   attr(value, ".np.empty.rows") <- NULL
-  labels <- if(length(row.labels) == length(flags)) row.labels[flags == 1L] else NULL
+  if(length(row.labels) == length(flags)) names(flags) <- row.labels
+  labels <- if(!is.null(names(flags))) names(flags)[flags == 1L] else NULL
   if(length(omitted)) {
     complete <- setdiff(seq_len(length(flags) + length(omitted)), omitted)
     expanded <- integer(length(flags) + length(omitted))
     expanded[complete] <- flags
+    if(!is.null(names(flags))) {
+      names(expanded) <- as.character(seq_along(expanded))
+      names(expanded)[complete] <- names(flags)
+    }
     flags <- expanded
   }
   if(defer) {
@@ -37,6 +44,48 @@
     owner, length(rows), paste(utils::head(labels, 8L), collapse = ", "),
     if(length(rows) > 8L) ", ..." else ""), call. = FALSE)
   value
+}
+
+# Each callback belongs to one public plot invocation. Grid/row identifiers
+# distinguish separate evaluation grids; required failures never call finish.
+.npreg_plot_empty_publisher <- function(owner = "plot()") {
+  rows <- character()
+  grid <- 0L
+  list(record = function(flags, labels = NULL) {
+    grid <<- grid + 1L
+    if(is.null(flags)) return(invisible(NULL))
+    missing <- which(flags == 1L)
+    rows <<- c(rows, paste0(grid, "/", missing))
+    invisible(NULL)
+  }, finish = function() {
+    if(length(rows))
+      .npreg_finish_empty_rows(list(), rep.int(1L, length(rows)),
+        owner = paste0(owner, " [grid/row]"), row.labels = rows)
+    invisible(NULL)
+  })
+}
+
+.npreg_publish_plot_rows <- function(value, flags = NULL, report = NULL,
+                                      omitted = integer(0), row.labels = NULL,
+                                      owner = "plot()") {
+  if(is.null(flags)) flags <- attr(value, ".np.empty.rows", exact = TRUE)
+  if(is.null(report))
+    return(.npreg_finish_empty_rows(value, flags, omitted = omitted,
+      row.labels = row.labels, owner = owner))
+  if(!is.null(flags)) {
+    value <- .npreg_finish_empty_rows(value, flags, omitted = omitted,
+      row.labels = row.labels, defer = TRUE)
+    flags <- attr(value, ".np.empty.rows", exact = TRUE)
+    attr(value, ".np.empty.rows") <- NULL
+  }
+  report(flags, names(flags))
+  value
+}
+
+.npreg_finish_plot_call <- function(expr, publisher) {
+  result <- withVisible(force(expr))
+  publisher$finish()
+  if(result$visible) result$value else invisible(result$value)
 }
 
 npreg <-

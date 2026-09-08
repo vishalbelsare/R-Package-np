@@ -540,7 +540,7 @@
                                idx.eval,
                                y = NULL,
                                output = c("matrix", "apply"),
-                               s = 0L) {
+                               s = 0L, allow.empty.rows = FALSE) {
   output <- match.arg(output)
   spec <- .npindex_resolve_spec(bws, where = "npindexhat")
   regtype.engine <- spec$regtype.engine
@@ -662,9 +662,12 @@
       txdat = idx.train,
       tydat = y,
       exdat = idx.eval,
-      gradients = FALSE
+      gradients = FALSE, allow.empty.rows = allow.empty.rows
     )
-    return(fit$mean)
+    out <- fit$mean
+    flags <- attr(fit, ".np.empty.rows", exact = TRUE)
+    if(!is.null(flags)) attr(out, ".np.empty.rows") <- flags
+    return(out)
   }
 
   fit_one <- function(ycol) {

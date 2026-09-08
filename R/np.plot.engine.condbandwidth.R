@@ -57,7 +57,7 @@
            proper.method = c("isotonic"),
            proper.control = list(),
            ...,
-           random.seed){
+           random.seed, .np.empty.report = NULL){
 
     sub.supplied <- !missing(sub)
 
@@ -313,7 +313,8 @@
           tydat = ydat,
           exdat = x.eval,
           tau = tau,
-          bws = bws
+          bws = bws,
+          .np.empty.report = .np.empty.report
         )
       } else {
         tobj <- .np_plot_conditional_eval(
@@ -828,7 +829,8 @@
             gradients = gradients,
             gradient.order = gradient.order,
             tau = tau,
-            bws = bws
+            bws = bws,
+            .np.empty.report = .np.empty.report
           )
         } else {
           tobj <- .np_plot_conditional_eval(
@@ -1231,7 +1233,8 @@
               eydat = subcol(eydat,ei,i)[seq_len(xi.neval),, drop = FALSE],
               gradients = gradients,
               tau = tau,
-              bws = bws
+              bws = bws,
+              .np.empty.report = .np.empty.report
             )
           } else {
             tobj <- .np_plot_conditional_eval(
